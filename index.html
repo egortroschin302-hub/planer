@@ -455,10 +455,12 @@ function goalRows(list,ph,tag){
            '<span class="row-t">'+esc(s.text)+'</span>'+
            '<button class="del" data-sd="'+tag+":"+g.id+":"+s.id+'" aria-label="Удалить">×</button></div>';
       });
-      h+='<div class="add sm"><span class="dot"></span><input data-sn="'+tag+":"+g.id+'" placeholder="шаг"></div></div>';
+      h+='<div class="add sm"><span class="dot"></span><input data-sn="'+tag+":"+g.id+'" placeholder="шаг">'+
+         '<button class="link" data-snbtn="'+tag+":"+g.id+'" style="flex:0 0 auto">добавить</button></div></div>';
     }
   });
-  h+='<div class="add"><span class="dot"></span><input data-n="'+tag+'" placeholder="'+ph+'"></div>';
+  h+='<div class="add"><span class="dot"></span><input data-n="'+tag+'" placeholder="'+ph+'">'+
+     '<button class="link" data-nbtn="'+tag+'" style="flex:0 0 auto">добавить</button></div>';
   return h;
 }
 function findList(tag){return tag==="y"?yg(year):mo(year,month).goals;}
@@ -486,14 +488,24 @@ function bindGoals(){
       save();render();};
   });
   app.querySelectorAll("[data-sn]").forEach(function(i){
-    i.onkeydown=function(e){if(e.key==="Enter"&&this.value.trim()){
-      var a=this.dataset.sn.split(":"),l=findList(a[0]);
+    function addStep(){
+      if(!i.value.trim())return;
+      var a=i.dataset.sn.split(":"),l=findList(a[0]);
       l.forEach(function(g){if(g.id===a[1])g.steps.push({id:uid(),text:i.value.trim(),done:false});});
-      save();render();}};
+      save();render();
+    }
+    i.onkeydown=function(e){if(e.key==="Enter")addStep();};
+    var btn=app.querySelector('[data-snbtn="'+i.dataset.sn+'"]');
+    if(btn)btn.onclick=addStep;
   });
   app.querySelectorAll("[data-n]").forEach(function(i){
-    i.onkeydown=function(e){if(e.key==="Enter"&&this.value.trim()){
-      findList(i.dataset.n).push({id:uid(),text:i.value.trim(),done:false,steps:[]});save();render();}};
+    function addGoal(){
+      if(!i.value.trim())return;
+      findList(i.dataset.n).push({id:uid(),text:i.value.trim(),done:false,steps:[]});save();render();
+    }
+    i.onkeydown=function(e){if(e.key==="Enter")addGoal();};
+    var btn=app.querySelector('[data-nbtn="'+i.dataset.n+'"]');
+    if(btn)btn.onclick=addGoal;
   });
 }
 
@@ -687,7 +699,8 @@ function renderMonth(){
   if(selDay){
     h+='<div class="ev-form"><span class="ev-day">'+selDay+" "+MSHORT[month]+'</span>'+
        '<input id="evText" placeholder="что за день" autofocus>'+
-       '<button class="chk" id="evYear"><span class="box"></span>каждый год</button></div>';
+       '<button class="chk" id="evYear"><span class="box"></span>каждый год</button>'+
+       '<button class="submit" id="evSave" style="flex:0 0 auto;padding:8px 16px">Сохранить</button></div>';
   }
   h+='</section>';
 
@@ -715,7 +728,8 @@ function renderMonth(){
     }
     h+='</div></div>';
   });
-  h+='<div class="add"><span class="dot"></span><input id="newHabit" placeholder="новая привычка"></div></section>';
+  h+='<div class="add"><span class="dot"></span><input id="newHabit" placeholder="новая привычка">'+
+     '<button class="link" id="newHabitBtn" style="flex:0 0 auto">добавить</button></div></section>';
 
   h+='<section class="sec"><div class="sec-h"><span class="sec-t">заметка месяца</span></div>'+
      '<textarea class="note" id="note" placeholder="мысли, итоги, что перенести">'+esc(m.note)+'</textarea></section>';
@@ -745,13 +759,14 @@ function renderMonth(){
     document.getElementById("evYear").onclick=function(){
       yearly=!yearly;this.querySelector(".box").classList.toggle("on",yearly);et.focus();};
     et.focus();
-    et.onkeydown=function(e){
-      if(e.key==="Enter"&&this.value.trim()){
-        if(yearly)D.annual.push({id:uid(),month:month,day:selDay,text:this.value.trim()});
-        else m.events.push({id:uid(),day:selDay,text:this.value.trim()});
-        selDay=0;save();render();
-      }
-    };
+    function saveEvent(){
+      if(!et.value.trim()){toast("Впишите, что за день");return;}
+      if(yearly)D.annual.push({id:uid(),month:month,day:selDay,text:et.value.trim()});
+      else m.events.push({id:uid(),day:selDay,text:et.value.trim()});
+      selDay=0;save();render();
+    }
+    et.onkeydown=function(e){if(e.key==="Enter")saveEvent();};
+    document.getElementById("evSave").onclick=saveEvent;
   }
   app.querySelectorAll("[data-ed]").forEach(function(b){
     b.onclick=function(){var a=b.dataset.ed.split(":");
@@ -794,8 +809,10 @@ function renderMonth(){
     b.onclick=function(){D.habits=D.habits.filter(function(x){return x.id!==b.dataset.hd;});
       delete D.marks[b.dataset.hd];save();render();};
   });
-  document.getElementById("newHabit").onkeydown=function(e){
-    if(e.key==="Enter"&&this.value.trim()){D.habits.push({id:uid(),name:this.value.trim()});save();render();}};
+  var nh=document.getElementById("newHabit");
+  function addHabit(){if(nh.value.trim()){D.habits.push({id:uid(),name:nh.value.trim()});save();render();}}
+  nh.onkeydown=function(e){if(e.key==="Enter")addHabit();};
+  document.getElementById("newHabitBtn").onclick=addHabit;
 
   var note=document.getElementById("note");
   note.oninput=function(){m.note=note.value;save();};

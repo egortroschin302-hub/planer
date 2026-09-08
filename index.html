@@ -991,7 +991,7 @@ function formHTML(){
     '<div class="mfield"><label>Сборы за, ч</label><input id="fPack" type="number" min="0" step="0.5" value="2"></div></div>'+
     '<div class="submit" id="fSave">Добавить рейс</div></div>';
 }
-var FLIGHT_LOOKUP_URL="";
+var FLIGHT_LOOKUP_URL="https://flight-lookup.egortroschin302.workers.dev";
 async function fetchFlightData(num,date){
   if(!num){toast("Впишите номер рейса");return null;}
   if(!FLIGHT_LOOKUP_URL){toast("Автопоиск не настроен — впишите данные вручную");return null;}

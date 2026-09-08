@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Планер</title>
-<meta name="theme-color" content="#EDEFEA">
+<meta name="theme-color" content="#F5EEE4">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -72,8 +72,13 @@ html[data-season="summer"][data-theme="dark"]{
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;background:var(--bg);}
 body{color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;
-  transition:background .2s,color .2s;}
+  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+*{transition:background-color .2s ease,border-color .2s ease,color .2s ease,
+  transform .12s ease,opacity .12s ease;}
+button:active{opacity:.68;}
+button.mcard:active,button.day:active,button.cell:active,button.wd:active,
+button.chip:active,.flight:active,.submit:active{transform:scale(.96);opacity:1;}
+.switch:active,.mark:active{transform:none;opacity:1;}
 button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0;text-align:left;}
 input,textarea,select{font:inherit;color:inherit;background:none;border:0;}
 :focus-visible{outline:2px solid var(--plum);outline-offset:3px;border-radius:2px;}
@@ -200,6 +205,9 @@ html[data-theme="dark"] .switch .knob{transform:translateX(18px);}
   font-size:13px;resize:vertical;background:var(--card);color:var(--ink);}
 .restore-row{display:flex;gap:14px;margin-top:8px;}
 .empty{color:var(--muted);font-size:14px;padding:4px 0 8px;}
+.empty-fx{text-align:center;padding:22px 0 14px;}
+.empty-fx svg{color:var(--mark-x);margin-bottom:8px;}
+.empty-fx .empty{padding:0;}
 .note{width:100%;border:1px solid var(--hair);border-radius:4px;padding:10px;font-size:15px;
   min-height:70px;resize:vertical;font-family:Georgia,serif;line-height:1.6;background:var(--card);color:var(--ink);}
 
@@ -262,6 +270,8 @@ html[data-theme="dark"] .switch .knob{transform:translateX(18px);}
   border-top:1px solid var(--hair);border-left:1px solid var(--hair);margin-bottom:6px;}
 .wk-dow{font-size:11px;color:var(--muted);text-align:center;padding:4px 0;
   border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);grid-row:1;}
+.wk-dow.weekend{color:var(--red);}
+.wk-cell.weekend{background:var(--plum-soft);}
 .wk-corner{border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);grid-row:1;}
 .wk-hourlabel{font-size:9px;color:var(--muted);text-align:right;padding-right:4px;
   border-right:1px solid var(--hair);border-bottom:1px solid var(--hair);
@@ -497,6 +507,13 @@ function habitStats(hb,y,m){
   while(marks[dkey(probe.getFullYear(),probe.getMonth(),probe.getDate())]){streak++;probe.setDate(probe.getDate()-1);}
   return {count:cnt,days:n,streak:streak};
 }
+function streakAt(marks,y,m,d){
+  var probe=new Date(y,m,d),count=0,guard=0;
+  while(marks[dkey(probe.getFullYear(),probe.getMonth(),probe.getDate())]&&guard<60){
+    count++;guard++;probe.setDate(probe.getDate()-1);
+  }
+  return count;
+}
 function habitYear(hb,y){
   var marks=D.marks[hb.id]||{},out=[],total=0;
   for(var m=0;m<12;m++){var n=daysIn(y,m),c=0;
@@ -661,7 +678,7 @@ function renderMonth(){
   h+='<div class="sec-h"><span class="sec-t">важные даты</span>'+
      (evs.length?'<button class="sec-a" id="icsMonth">в календарь</button>':"")+
      '<span class="sec-n">'+(evs.length||"")+'</span></div>';
-  if(!evs.length)h+='<p class="empty">Тапните по числу, чтобы добавить.</p>';
+  if(!evs.length)h+=emptyBlock("Тапните по числу, чтобы добавить.");
   evs.forEach(function(e){
     h+='<div class="evt"><span class="evt-d">'+e.day+" "+MSHORT[month]+'</span>'+
        '<span class="evt-t">'+esc(e.text)+(e.yearly?' <span class="evt-y">каждый год</span>':"")+'</span>'+
@@ -681,7 +698,7 @@ function renderMonth(){
      goalRows(m.goals,"цель на месяц","m")+'</section>';
 
   h+='<section class="sec"><div class="sec-h"><span class="sec-t">привычки</span></div>';
-  if(!D.habits.length)h+='<p class="empty">Добавьте привычку — появится сетка на месяц.</p>';
+  if(!D.habits.length)h+=emptyBlock("Добавьте привычку — появится сетка на месяц.");
   D.habits.forEach(function(hb){
     var st=habitStats(hb,year,month),marks=D.marks[hb.id]||{};
     h+='<div class="habit"><div class="habit-h"><span class="habit-n">'+esc(hb.name)+'</span>'+
@@ -691,9 +708,10 @@ function renderMonth(){
     for(var i2=0;i2<firstDow(year,month);i2++)h+='<span class="cell pad"></span>';
     for(var d2=1;d2<=n;d2++){
       var k=dkey(year,month,d2);
+      var op=marks[k]?Math.min(1,0.45+streakAt(marks,year,month,d2)*0.08).toFixed(2):null;
       h+='<button class="cell'+(marks[k]?" on":"")+(isToday(year,month,d2)?" today":"")+
          (!isPast(year,month,d2)&&!isToday(year,month,d2)?" future":"")+
-         '" data-hb="'+hb.id+'" data-k="'+k+'">'+d2+'</button>';
+         '" data-hb="'+hb.id+'" data-k="'+k+'"'+(op?' style="opacity:'+op+'"':"")+'>'+d2+'</button>';
     }
     h+='</div></div>';
   });
@@ -769,9 +787,7 @@ function renderMonth(){
       var id=b.dataset.hb,k=b.dataset.k;
       if(!D.marks[id])D.marks[id]={};
       if(D.marks[id][k])delete D.marks[id][k];else D.marks[id][k]=true;
-      save();b.classList.toggle("on");
-      var cnt=0;for(var d=1;d<=n;d++)if(D.marks[id][dkey(year,month,d)])cnt++;
-      b.closest(".habit").querySelector(".hs").textContent=cnt+" из "+n;
+      save();render();
     };
   });
   app.querySelectorAll("[data-hd]").forEach(function(b){
@@ -951,7 +967,7 @@ function render(){
   if(showRing)h+=ringHTML();
 
   if(!blocks.length){
-    h+='<p class="empty">Пока ни одного рейса. Добавьте — появится обратный отсчёт.</p>';
+    h+=emptyBlock("Пока ни одного рейса. Добавьте — появится обратный отсчёт.");
   }
 
   blocks.forEach(function(b){
@@ -1324,15 +1340,15 @@ function gridHTML(evs){
   var out='<div class="wk-grid" style="grid-template-rows:20px repeat('+totalRows+',9px)">';
   out+='<div class="wk-corner" style="grid-column:1;grid-row:1"></div>';
   for(var d=0;d<7;d++){
-    var dt=addDays(anchor,d),isToday=iso(dt)===iso(new Date());
-    out+='<div class="wk-dow" style="grid-column:'+(d+2)+';grid-row:1'+
+    var dt=addDays(anchor,d),isToday=iso(dt)===iso(new Date()),isWeekend=d>=5;
+    out+='<div class="wk-dow'+(isWeekend?" weekend":"")+'" style="grid-column:'+(d+2)+';grid-row:1'+
       (isToday?';color:var(--plum)':'')+'">'+DOWS[d]+' '+dt.getDate()+'</div>';
   }
   hours.forEach(function(hr,i){
     var r0=2+i*ROWS_H;
     out+='<div class="wk-hourlabel" style="grid-column:1;grid-row:'+r0+' / span '+ROWS_H+'">'+hr+'</div>';
     for(var d2=0;d2<7;d2++)
-      out+='<div class="wk-cell" data-add-day="'+d2+'" data-add-hour="'+hr+
+      out+='<div class="wk-cell'+(d2>=5?" weekend":"")+'" data-add-day="'+d2+'" data-add-hour="'+hr+
         '" style="grid-column:'+(d2+2)+';grid-row:'+r0+' / span '+ROWS_H+'"></div>';
   });
   evs.forEach(function(e){
@@ -1447,6 +1463,17 @@ function initTheme(){
 }
 
 var SEASON_LABEL={auto:"авто",winter:"зима",spring:"весна",summer:"лето",autumn:"осень"};
+var SEASON_GLYPHS={
+  autumn:'<path d="M16 4c6 4 10 10 8 18-2 7-9 10-14 6-4-4-3-11 1-16 2-3 3-6 5-8z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M16 4v24" stroke="currentColor" stroke-width="1.2"/>',
+  winter:'<path d="M16 3v26M4 16h24M7 7l18 18M25 7L7 25" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>',
+  spring:'<circle cx="16" cy="16" r="3.2" fill="currentColor"/><path d="M16 16c0-5 3-9 3-9s3 4 3 9-3 9-3 9-3-4-3-9z" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M16 16c5 0 9 3 9 3s-4 3-9 3-9-3-9-3 4-3 9-3z" fill="none" stroke="currentColor" stroke-width="1.2"/>',
+  summer:'<circle cx="16" cy="16" r="6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M16 2v4M16 26v4M2 16h4M26 16h4M6 6l3 3M23 23l3 3M26 6l-3 3M9 23l-3 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>'
+};
+function emptyBlock(text){
+  var s=effectiveSeason();
+  return '<div class="empty-fx"><svg width="32" height="32" viewBox="0 0 32 32">'+
+    (SEASON_GLYPHS[s]||SEASON_GLYPHS.autumn)+'</svg><p class="empty">'+text+'</p></div>';
+}
 var SEASON_ORDER=["auto","winter","spring","summer","autumn"];
 var FX_CONF={
   winter:{shape:"snow",count:16,anim:"fxFall",dur:[10,18],size:[4,8]},

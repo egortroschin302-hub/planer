@@ -418,9 +418,9 @@ function mo(y,m){var k=key(y,m);if(!D.months[k])D.months[k]={goals:[],events:[],
   var x=D.months[k];if(!x.goals)x.goals=[];if(!x.events)x.events=[];if(x.note==null)x.note="";return x;}
 function yg(y){if(!D.yearGoals[y])D.yearGoals[y]=[];return D.yearGoals[y];}
 function eventsOf(y,m){
-  var list=mo(y,m).events.map(function(e){return {id:e.id,day:e.day,text:e.text,yearly:false};});
-  D.annual.forEach(function(a){if(a.month===m)list.push({id:a.id,day:a.day,text:a.text,yearly:true});});
-  return list.sort(function(a,b){return a.day-b.day;});
+  var list=mo(y,m).events.map(function(e){return {id:e.id,day:e.day,text:e.text,time:e.time||"",yearly:false};});
+  D.annual.forEach(function(a){if(a.month===m)list.push({id:a.id,day:a.day,text:a.text,time:a.time||"",yearly:true});});
+  return list.sort(function(a,b){return a.day-b.day||(a.time||"").localeCompare(b.time||"");});
 }
 function plural(n,a,b,c){var x=n%100;if(x>4&&x<21)return c;x=n%10;return x===1?a:(x>1&&x<5?b:c);}
 function toast(msg){var t=document.createElement("div");t.className="toast";t.textContent=msg;
@@ -541,7 +541,7 @@ function upcoming(limit){
     var d=new Date(t.getFullYear(),t.getMonth()+i,1),y=d.getFullYear(),m=d.getMonth();
     eventsOf(y,m).forEach(function(e){
       var dt=new Date(y,m,e.day);
-      if(dt>=t)out.push({date:dt,text:e.text,yearly:e.yearly,
+      if(dt>=t)out.push({date:dt,text:e.text,time:e.time,yearly:e.yearly,
         days:Math.round((dt-t)/86400000)});
     });
     if(out.length>=limit*3)break;
@@ -568,7 +568,8 @@ function renderYear(){
   if(up.length){
     h+='<section class="sec"><div class="sec-h"><span class="sec-t">ближайшее</span></div>';
     up.forEach(function(e){
-      h+='<div class="evt"><span class="evt-d">'+e.date.getDate()+" "+MSHORT[e.date.getMonth()]+'</span>'+
+      h+='<div class="evt"><span class="evt-d">'+e.date.getDate()+" "+MSHORT[e.date.getMonth()]+
+         (e.time?", "+e.time:"")+'</span>'+
          '<span class="evt-t">'+esc(e.text)+(e.yearly?' <span class="evt-y">каждый год</span>':"")+'</span>'+
          '<span class="evt-y">'+whenLabel(e.days)+'</span></div>';
     });
@@ -692,13 +693,14 @@ function renderMonth(){
      '<span class="sec-n">'+(evs.length||"")+'</span></div>';
   if(!evs.length)h+=emptyBlock("Тапните по числу, чтобы добавить.");
   evs.forEach(function(e){
-    h+='<div class="evt"><span class="evt-d">'+e.day+" "+MSHORT[month]+'</span>'+
+    h+='<div class="evt"><span class="evt-d">'+e.day+" "+MSHORT[month]+(e.time?", "+e.time:"")+'</span>'+
        '<span class="evt-t">'+esc(e.text)+(e.yearly?' <span class="evt-y">каждый год</span>':"")+'</span>'+
        '<button class="del" data-ed="'+(e.yearly?"a:":"m:")+e.id+'" aria-label="Удалить">×</button></div>';
   });
   if(selDay){
     h+='<div class="ev-form"><span class="ev-day">'+selDay+" "+MSHORT[month]+'</span>'+
        '<input id="evText" placeholder="что за день" autofocus>'+
+       '<input id="evTime" type="time" style="flex:0 0 100px">'+
        '<button class="chk" id="evYear"><span class="box"></span>каждый год</button>'+
        '<button class="submit" id="evSave" style="flex:0 0 auto;padding:8px 16px">Сохранить</button></div>';
   }
@@ -761,8 +763,9 @@ function renderMonth(){
     et.focus();
     function saveEvent(){
       if(!et.value.trim()){toast("Впишите, что за день");return;}
-      if(yearly)D.annual.push({id:uid(),month:month,day:selDay,text:et.value.trim()});
-      else m.events.push({id:uid(),day:selDay,text:et.value.trim()});
+      var tm=document.getElementById("evTime").value||"";
+      if(yearly)D.annual.push({id:uid(),month:month,day:selDay,text:et.value.trim(),time:tm});
+      else m.events.push({id:uid(),day:selDay,text:et.value.trim(),time:tm});
       selDay=0;save();render();
     }
     et.onkeydown=function(e){if(e.key==="Enter")saveEvent();};
@@ -778,8 +781,10 @@ function renderMonth(){
   var icsM=document.getElementById("icsMonth");
   if(icsM)icsM.onclick=function(){
     var items=evs.map(function(e){
-      var start=new Date(year,month,e.day,9,0,0);
-      var ev={start:start,end:new Date(start.getTime()+30*60000),title:e.text,alarms:[{minutesBefore:0}]};
+      var hm=(e.time||"09:00").split(":");
+      var start=new Date(year,month,e.day,+hm[0]||9,+hm[1]||0,0);
+      var ev={start:start,end:new Date(start.getTime()+30*60000),title:e.text,
+        alarms:[{minutesBefore:e.time?15:0}]};
       if(e.yearly)ev.rrule="FREQ=YEARLY";
       return ev;
     });

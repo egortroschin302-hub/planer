@@ -13,17 +13,61 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-512.png">
 <style>
-:root{
+:root, html[data-season="autumn"]{
   --bg:#F5EEE4; --card:#FFFFFF; --ink:#3B2F27; --muted:#9C8C7C;
   --hair:#E6DACB; --plum:#6F5540; --plum-soft:#EFE3D3; --sage:#96A68C;
   --amber:#A97C4F; --red:#B0614E; --mark-x:#D8CBB8;
   --blk1:#EFE1D3; --blk2:#E4CBB0; --blk3:#D8B694; --blk4:#C79B75; --blk5:#A9805E; --blk6:#8B6547;
+  --fx-color:#B5652E;
 }
-html[data-theme="dark"]{
+html[data-theme="dark"], html[data-season="autumn"][data-theme="dark"]{
   --bg:#211A14; --card:#2C2318; --ink:#F0E6DA; --muted:#A08E7C;
   --hair:#3E3226; --plum:#C9A97D; --plum-soft:#3A2E22; --sage:#8FA189;
   --amber:#D8AF72; --red:#D98A6E; --mark-x:#544539;
   --blk1:#4B3B2C; --blk2:#5C4632; --blk3:#6E5238; --blk4:#7F5E3E; --blk5:#8F6B47; --blk6:#A67C53;
+  --fx-color:#E08A4D;
+}
+html[data-season="winter"]{
+  --bg:#EEF3F6; --card:#FFFFFF; --ink:#28343D; --muted:#8A9AA6;
+  --hair:#DCE6EC; --plum:#3E7EA8; --plum-soft:#DCEBF3; --sage:#96A68C;
+  --amber:#7C93A8; --red:#B0614E; --mark-x:#C9D6DE;
+  --blk1:#E8F1F6; --blk2:#D3E6EF; --blk3:#B9D8E6; --blk4:#98C2D8; --blk5:#6FA6C4; --blk6:#4A82A5;
+  --fx-color:#BFE0F0;
+}
+html[data-season="winter"][data-theme="dark"]{
+  --bg:#141C22; --card:#1D2932; --ink:#E7EEF2; --muted:#8FA3B0;
+  --hair:#2C3A44; --plum:#6FB4DE; --plum-soft:#22323C; --sage:#8FA189;
+  --amber:#8FB0C4; --red:#D68974; --mark-x:#33454F;
+  --blk1:#1E2C34; --blk2:#243C48; --blk3:#2C4C5C; --blk4:#356074; --blk5:#40768C; --blk6:#4E8CA6;
+  --fx-color:#8FCDE8;
+}
+html[data-season="spring"]{
+  --bg:#F3F6EE; --card:#FFFFFF; --ink:#2E3B27; --muted:#8FA084;
+  --hair:#E1EAD8; --plum:#7C9A5C; --plum-soft:#E7F0DC; --sage:#96A68C;
+  --amber:#B79A4E; --red:#C1707E; --mark-x:#D3E0C6;
+  --blk1:#EFF5E7; --blk2:#DEEBD0; --blk3:#C9DFB4; --blk4:#AFCF95; --blk5:#8FB86F; --blk6:#6E9C4E;
+  --fx-color:#E3A6B8;
+}
+html[data-season="spring"][data-theme="dark"]{
+  --bg:#161C13; --card:#212B1B; --ink:#E7EFDF; --muted:#93A686;
+  --hair:#2E3A26; --plum:#9CC17A; --plum-soft:#28331F; --sage:#8FA189;
+  --amber:#C2B06C; --red:#D68FA0; --mark-x:#3A4830;
+  --blk1:#212B1B; --blk2:#293523; --blk3:#33422A; --blk4:#3E5033; --blk5:#4C623E; --blk6:#5D774C;
+  --fx-color:#E9AFC1;
+}
+html[data-season="summer"]{
+  --bg:#EAF6F3; --card:#FFFFFF; --ink:#1F3B36; --muted:#7FA69C;
+  --hair:#D3ECE5; --plum:#2E9C86; --plum-soft:#DBF0EA; --sage:#96A68C;
+  --amber:#D9A441; --red:#C1614A; --mark-x:#C3E4DB;
+  --blk1:#E1F5EF; --blk2:#C7ECE0; --blk3:#A6DECE; --blk4:#7FCBB6; --blk5:#54B49B; --blk6:#379880;
+  --fx-color:#E3C05C;
+}
+html[data-season="summer"][data-theme="dark"]{
+  --bg:#0F211D; --card:#17302A; --ink:#DFF3EE; --muted:#7FAFA2;
+  --hair:#254740; --plum:#4FC3A8; --plum-soft:#1C332C; --sage:#8FA189;
+  --amber:#E0BD6F; --red:#D9836C; --mark-x:#2C4A42;
+  --blk1:#17302A; --blk2:#1D3C34; --blk3:#25493F; --blk4:#2E584B; --blk5:#38695A; --blk6:#447D6B;
+  --fx-color:#E9CE7E;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{margin:0;padding:0;background:var(--bg);}
@@ -240,9 +284,29 @@ html[data-theme="dark"] .switch .knob{transform:translateX(18px);}
 .toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%);
   background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:20px;font-size:14px;z-index:20;}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+
+#seasonFX{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden;}
+.fx{position:absolute;top:-10vh;will-change:transform;}
+.fx-leaf{border-radius:0 100% 0 100%;background:var(--fx-color);opacity:.45;}
+.fx-snow{border-radius:50%;background:var(--fx-color);opacity:.6;}
+@keyframes fxFall{
+  0%{transform:translate(0,-10vh) rotate(0deg);}
+  50%{transform:translate(var(--sway),50vh) rotate(180deg);}
+  100%{transform:translate(0,110vh) rotate(360deg);}
+}
+@keyframes fxRise{
+  0%{transform:translate(0,110vh) rotate(0deg);opacity:0;}
+  10%{opacity:.55;}
+  90%{opacity:.55;}
+  100%{transform:translate(var(--sway),-10vh) rotate(180deg);opacity:0;}
+}
+.season-btn{color:var(--muted);font-size:12px;padding:6px 8px;border:1px solid var(--hair);
+  border-radius:12px;margin-right:8px;}
+@media (prefers-reduced-motion:reduce){.fx{animation:none!important;display:none;}}
 </style>
 </head>
 <body>
+<div id="seasonFX" aria-hidden="true"></div>
 <header class="topbar">
   <div class="topbar-row">
     <nav class="tabs">
@@ -250,7 +314,10 @@ html[data-theme="dark"] .switch .knob{transform:translateX(18px);}
       <button class="tab" data-tab="week">Неделя</button>
       <button class="tab" data-tab="flights">Рейсы</button>
     </nav>
-    <button class="switch" id="themeSwitch" aria-label="Переключить тему"><span class="knob">☀</span></button>
+    <div style="display:flex;align-items:center">
+      <button class="season-btn" id="seasonBtn">осень</button>
+      <button class="switch" id="themeSwitch" aria-label="Переключить тему"><span class="knob">☀</span></button>
+    </div>
   </div>
   <button class="reset-link" id="hardReset">обновить принудительно</button>
 </header>
@@ -1378,6 +1445,60 @@ function initTheme(){
   if(!saved)saved=(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";
   applyTheme(saved);
 }
+
+var SEASON_LABEL={auto:"авто",winter:"зима",spring:"весна",summer:"лето",autumn:"осень"};
+var SEASON_ORDER=["auto","winter","spring","summer","autumn"];
+var FX_CONF={
+  winter:{shape:"snow",count:16,anim:"fxFall",dur:[10,18],size:[4,8]},
+  spring:{shape:"leaf",count:10,anim:"fxFall",dur:[14,22],size:[9,14]},
+  summer:{shape:"snow",count:8,anim:"fxRise",dur:[16,26],size:[5,9]},
+  autumn:{shape:"leaf",count:12,anim:"fxFall",dur:[11,19],size:[10,16]}
+};
+function seasonOf(d){
+  var m=d.getMonth();
+  if(m===11||m===0||m===1)return "winter";
+  if(m>=2&&m<=4)return "spring";
+  if(m>=5&&m<=7)return "summer";
+  return "autumn";
+}
+function seasonOverride(){
+  try{return localStorage.getItem("season:v1")||"auto";}catch(e){return "auto";}
+}
+function effectiveSeason(){
+  var o=seasonOverride();
+  return o==="auto"?seasonOf(new Date()):o;
+}
+function renderSeasonFX(season){
+  var box=document.getElementById("seasonFX");
+  if(!box)return;
+  var c=FX_CONF[season]||FX_CONF.autumn;
+  var h="";
+  for(var i=0;i<c.count;i++){
+    var left=Math.round(Math.random()*100);
+    var dur=(c.dur[0]+Math.random()*(c.dur[1]-c.dur[0])).toFixed(1);
+    var delay=(-Math.random()*dur).toFixed(1);
+    var size=Math.round(c.size[0]+Math.random()*(c.size[1]-c.size[0]));
+    var sway=Math.round(-30+Math.random()*60);
+    h+='<span class="fx fx-'+c.shape+'" style="left:'+left+'%;width:'+size+'px;height:'+size+'px;'+
+       'animation:'+c.anim+' '+dur+'s linear infinite;animation-delay:'+delay+'s;--sway:'+sway+'px"></span>';
+  }
+  box.innerHTML=h;
+}
+function applySeason(){
+  var s=effectiveSeason();
+  document.documentElement.setAttribute("data-season",s);
+  renderSeasonFX(s);
+  var btn=document.getElementById("seasonBtn");
+  if(btn)btn.textContent=seasonOverride()==="auto"?SEASON_LABEL[s]:SEASON_LABEL[s]+" ✓";
+}
+document.getElementById("seasonBtn").onclick=function(){
+  var cur=seasonOverride();
+  var idx=(SEASON_ORDER.indexOf(cur)+1)%SEASON_ORDER.length;
+  try{localStorage.setItem("season:v1",SEASON_ORDER[idx]);}catch(e){}
+  applySeason();
+};
+setInterval(applySeason,3600000);
+
 function showTab(t){
   if(App.tab==="flights"&&t!=="flights")Reysy.stop();
   App.tab=t;
@@ -1407,6 +1528,7 @@ document.getElementById("hardReset").onclick=function(){
   Promise.all(tasks).then(done).catch(done);
 };
 initTheme();
+applySeason();
 showTab("planner");
 if("serviceWorker" in navigator)
   window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});

@@ -742,12 +742,13 @@ var Reysy=(function(){
 var KEY="reysy:v1";
 var MONTHS=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
 var DOW=["вс","пн","вт","ср","чт","пт","сб"];
-var D=load(),showForm=false,saveTimer=null,tickTimer=null;
+var D=load(),showForm=false,showRing=false,ringName="",ringLegs=[],saveTimer=null,tickTimer=null;
 
 function load(){
-  try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);return {flights:o.flights||[]};}}
+  try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);
+    return {flights:o.flights||[],trips:o.trips||[]};}}
   catch(e){}
-  return {flights:[]};
+  return {flights:[],trips:[]};
 }
 function save(){
   clearTimeout(saveTimer);
@@ -774,6 +775,7 @@ function copyText(text){
 }
 
 function dt(f){return new Date(f.date+"T"+f.time);}
+function arrDt(f){return f.arrTime?new Date(f.date+"T"+f.arrTime):null;}
 function fmtDate(d){return DOW[d.getDay()]+", "+d.getDate()+" "+MONTHS[d.getMonth()];}
 function fmtTime(d){return p2(d.getHours())+":"+p2(d.getMinutes());}
 function fmtDT(d){return fmtDate(d)+" в "+fmtTime(d);}
@@ -789,127 +791,355 @@ function fmtLeft(ms){
   return parts.join(" ");
 }
 function plural(n,a,b,c){var x=n%100;if(x>4&&x<21)return c;x=n%10;return x===1?a:(x>1&&x<5?b:c);}
+function routeLabel(f){
+  if(f.from||f.to)return (f.from||"?")+" → "+(f.to||"?");
+  return f.route||"";
+}
 
 var app=document.getElementById("content");
 
 function stagesOf(f){
-  var dep=dt(f),checkin=addH(dep,-f.checkinH),pack=addH(checkin,-f.packH);
+  var dep=dt(f),checkin=addH(dep,-(f.checkinH||0)),pack=addH(checkin,-(f.packH||0));
   return {pack:pack,checkin:checkin,dep:dep};
 }
 
-function render(){
-  var now=new Date();
-  var list=D.flights.slice().sort(function(a,b){return dt(a)-dt(b);});
-  var h='<div class="head"><h1 class="title">Рейсы</h1><span class="saved">сохранено</span></div>';
+function flightCardHTML(f,simple){
+  var s=stagesOf(f),now=new Date(),isPast=now>s.dep;
+  var h='<div class="flight'+(isPast?" past":"")+'" data-id="'+f.id+'">';
+  h+='<div class="f-top"><div><div class="f-num">'+esc(f.number)+'</div>'+
+     (routeLabel(f)?'<div class="f-route">'+esc(routeLabel(f))+'</div>':"")+'</div>'+
+     '<button class="f-del" data-del="'+f.id+'" aria-label="Удалить">×</button></div>';
 
-  h+= showForm ? formHTML() : '<button class="toggle-form" id="openForm">+ добавить рейс</button>';
+  var when='Вылет <b>'+fmtDT(s.dep)+'</b>';
+  if(f.terminal)when+=', терминал <b>'+esc(f.terminal)+'</b>';
+  if(f.arrTime)when+=', прибытие <b>'+esc(f.arrTime)+'</b>';
+  h+='<div class="f-when">'+when+'</div>';
 
-  if(!list.length){
-    h+='<p class="empty">Пока ни одного рейса. Добавьте — появится обратный отсчёт.</p>';
+  if(!isPast){
+    var next,label,cls="";
+    if(simple){
+      next=s.dep;label="до вылета";cls="urgent";
+    } else if(now<s.pack){next=s.pack;label="до сборов";}
+    else if(now<s.checkin){next=s.checkin;label="до явки в терминале";cls="warn";}
+    else {next=s.dep;label="до вылета";cls="urgent";}
+    var ms=next-now;
+    if(ms<15*60000)cls="urgent";
+    h+='<div class="big"><div class="big-label">'+label+'</div>'+
+       '<div class="big-time '+cls+'">'+fmtLeft(ms)+'</div></div>';
   }
-  list.forEach(function(f){
-    var s=stagesOf(f),isPast=now>s.dep,h1=f.checkinH||2,h2=f.packH||2;
-    h+='<div class="flight'+(isPast?" past":"")+'" data-id="'+f.id+'">';
-    h+='<div class="f-top"><div><div class="f-num">'+esc(f.number)+'</div>'+
-       (f.route?'<div class="f-route">'+esc(f.route)+'</div>':"")+'</div>'+
-       '<button class="f-del" data-del="'+f.id+'" aria-label="Удалить">×</button></div>';
-    h+='<div class="f-when">Вылет <b>'+fmtDT(s.dep)+'</b>'+(f.terminal?", терминал <b>"+esc(f.terminal)+"</b>":"")+'</div>';
 
-    if(!isPast){
-      var next,label,cls="";
-      if(now<s.pack){next=s.pack;label="до сборов";}
-      else if(now<s.checkin){next=s.checkin;label="до явки в терминале";cls="warn";}
-      else {next=s.dep;label="до вылета";cls="urgent";}
-      var ms=next-now;
-      if(ms<15*60000)cls="urgent";
-      h+='<div class="big"><div class="big-label">'+label+'</div>'+
-         '<div class="big-time '+cls+'">'+fmtLeft(ms)+'</div></div>';
-    }
-
+  if(!simple){
     h+='<div class="stage"><span class="stage-dot'+(now>=s.pack?" done":"")+'"></span>'+
        '<span class="stage-txt">Собираться</span><span class="stage-time">'+fmtTime(s.pack)+'</span></div>';
     h+='<div class="stage"><span class="stage-dot'+(now>=s.checkin?" done":"")+'"></span>'+
        '<span class="stage-txt">Быть в терминале</span><span class="stage-time">'+fmtTime(s.checkin)+'</span></div>';
-    h+='<div class="stage"><span class="stage-dot'+(now>=s.dep?" done":"")+'"></span>'+
-       '<span class="stage-txt">Вылет</span><span class="stage-time">'+fmtTime(s.dep)+'</span></div>';
+  }
+  h+='<div class="stage"><span class="stage-dot'+(now>=s.dep?" done":"")+'"></span>'+
+     '<span class="stage-txt">Вылет</span><span class="stage-time">'+fmtTime(s.dep)+'</span></div>';
 
-    h+='<div class="actions"><button class="link" data-alarm="'+f.id+'">будильники</button>'+
-       '<button class="link" data-ics="'+f.id+'">в календарь</button></div>';
-    h+='<div id="alarmBox-'+f.id+'"></div>';
-    h+='</div>';
+  h+='<div class="actions"><button class="link" data-alarm="'+f.id+'">будильники</button>'+
+     '<button class="link" data-ics="'+f.id+'">в календарь</button></div>';
+  h+='<div id="alarmBox-'+f.id+'"></div>';
+  h+='</div>';
+  return h;
+}
+
+function connectionHTML(prev,cur){
+  var prevArr=arrDt(prev);
+  if(prevArr){
+    var mins=Math.round((dt(cur)-prevArr)/60000);
+    var label=mins>=0?fmtLeft(mins*60000):"время пересадки не сходится";
+    return '<div class="f-when" style="padding:6px 0 10px;color:var(--muted)">'+
+      '⤷ пересадка'+(prev.to?" в "+esc(prev.to):"")+': <b>'+label+'</b></div>';
+  }
+  return '<div class="f-when" style="padding:2px 0 10px;color:var(--muted)">⤷ следующий рейс</div>';
+}
+
+function render(){
+  var now=new Date();
+  var standalone=D.flights.filter(function(f){return !f.tripId;});
+  var byTrip={};
+  D.flights.filter(function(f){return f.tripId;}).forEach(function(f){
+    (byTrip[f.tripId]=byTrip[f.tripId]||[]).push(f);
+  });
+  Object.keys(byTrip).forEach(function(tid){
+    byTrip[tid].sort(function(a,b){return (a.legIndex||0)-(b.legIndex||0);});
+  });
+
+  var blocks=standalone.map(function(f){return {t:"flight",key:dt(f),f:f};});
+  D.trips.forEach(function(tr){
+    var legs=byTrip[tr.id]||[];
+    if(!legs.length)return;
+    blocks.push({t:"trip",key:dt(legs[0]),trip:tr,legs:legs});
+  });
+  blocks.sort(function(a,b){return a.key-b.key;});
+
+  var h='<div class="head"><h1 class="title">Рейсы</h1><span class="saved">сохранено</span></div>';
+
+  h+='<div class="frow" style="gap:16px;margin-bottom:'+((showForm||showRing)?"0":"20px")+'">';
+  h+= showForm ? "" : '<button class="toggle-form" id="openForm" style="margin:0">+ добавить рейс</button>';
+  h+= showRing ? "" : '<button class="toggle-form" id="openRing" style="margin:0">+ добавить кольцо</button>';
+  h+='</div>';
+  if(showForm)h+=formHTML();
+  if(showRing)h+=ringHTML();
+
+  if(!blocks.length){
+    h+='<p class="empty">Пока ни одного рейса. Добавьте — появится обратный отсчёт.</p>';
+  }
+
+  blocks.forEach(function(b){
+    if(b.t==="flight"){h+=flightCardHTML(b.f,false);return;}
+    var legs=b.legs,first=dt(legs[0]),last=dt(legs[legs.length-1]);
+    var range=first.getDate()===last.getDate()&&first.getMonth()===last.getMonth()
+      ?fmtDate(first)
+      :first.getDate()+" "+MONTHS[first.getMonth()]+" – "+last.getDate()+" "+MONTHS[last.getMonth()];
+    h+='<div class="sec-h" style="margin-top:22px"><span class="sec-t">'+esc(b.trip.name||"кольцо")+
+       '</span><span class="sec-n">'+legs.length+" "+plural(legs.length,"рейс","рейса","рейсов")+" · "+range+'</span></div>';
+    h+='<button class="link" data-deltrip="'+b.trip.id+'" style="margin-bottom:10px">удалить кольцо целиком</button>';
+    legs.forEach(function(leg,i){
+      if(i>0)h+=connectionHTML(legs[i-1],leg);
+      h+=flightCardHTML(leg, !(leg.checkinH||leg.packH));
+    });
   });
 
   app.innerHTML=h;
+  bindCommon();
+  bindForm();
+  bindRing();
+  clearInterval(tickTimer);
+  tickTimer=setInterval(render,60000);
+}
 
+function bindCommon(){
   var of=document.getElementById("openForm");
-  if(of)of.onclick=function(){showForm=true;render();};
+  if(of)of.onclick=function(){showForm=true;showRing=false;render();};
+  var or_=document.getElementById("openRing");
+  if(or_)or_.onclick=function(){
+    showRing=true;showForm=false;
+    ringName="";
+    var d0=new Date().toISOString().slice(0,10);
+    ringLegs=[blankLeg(d0),blankLeg(d0)];
+    render();
+  };
 
   app.querySelectorAll("[data-del]").forEach(function(b){
     b.onclick=function(){D.flights=D.flights.filter(function(f){return f.id!==b.dataset.del;});save();render();};
+  });
+  app.querySelectorAll("[data-deltrip]").forEach(function(b){
+    b.onclick=function(){
+      if(!confirm("Удалить кольцо и все его рейсы?"))return;
+      D.trips=D.trips.filter(function(t){return t.id!==b.dataset.deltrip;});
+      D.flights=D.flights.filter(function(f){return f.tripId!==b.dataset.deltrip;});
+      save();render();
+    };
   });
   app.querySelectorAll("[data-alarm]").forEach(function(b){
     b.onclick=function(){
       var f=D.flights.filter(function(x){return x.id===b.dataset.alarm;})[0];if(!f)return;
       var s=stagesOf(f),box=document.getElementById("alarmBox-"+f.id);
       if(box.innerHTML){box.innerHTML="";return;}
-      var text="Рейс "+f.number+"\nСобраться к "+fmtTime(s.pack)+" ("+fmtDate(s.pack)+")"+
-        "\nВыйти / быть в терминале к "+fmtTime(s.checkin)+"\nВылет "+fmtTime(s.dep);
+      var text;
+      if(f.checkinH||f.packH){
+        text="Рейс "+f.number+"\nСобраться к "+fmtTime(s.pack)+" ("+fmtDate(s.pack)+")"+
+          "\nВыйти / быть в терминале к "+fmtTime(s.checkin)+"\nВылет "+fmtTime(s.dep);
+      } else {
+        text="Рейс "+f.number+"\nВылет "+fmtTime(s.dep)+" ("+fmtDate(s.dep)+")"+
+          (f.terminal?", терминал "+f.terminal:"");
+      }
       box.innerHTML='<div class="alarms">'+esc(text)+
         '</div><button class="link" style="margin-top:8px" data-copyalarm="'+f.id+'">скопировать текст</button>';
       box.querySelector("[data-copyalarm]").onclick=function(){copyText(text);};
     };
   });
-
-  bindForm();
   app.querySelectorAll("[data-ics]").forEach(function(b){
     b.onclick=function(){
       var f=D.flights.filter(function(x){return x.id===b.dataset.ics;})[0];if(!f)return;
       var s=stagesOf(f);
-      downloadICS("reys-"+f.number.replace(/\s+/g,"")+".ics",[{
-        start:s.dep,end:new Date(s.dep.getTime()+30*60000),
-        title:"Рейс "+f.number+(f.route?" — "+f.route:""),
-        description:(f.terminal?"Терминал "+f.terminal:"")+"\nЯвка "+fmtTime(s.checkin)+", сборы "+fmtTime(s.pack),
-        alarms:[
+      var alarms;
+      if(f.checkinH||f.packH){
+        alarms=[
           {minutesBefore:Math.round((s.dep-s.checkin)/60000),desc:"Быть в терминале — рейс "+f.number},
           {minutesBefore:Math.round((s.dep-s.pack)/60000),desc:"Пора собираться — рейс "+f.number}
-        ]
+        ];
+      } else {
+        alarms=[{minutesBefore:60,desc:"Посадка на рейс "+f.number}];
+      }
+      downloadICS("reys-"+f.number.replace(/\s+/g,"")+".ics",[{
+        start:s.dep,end:new Date(s.dep.getTime()+30*60000),
+        title:"Рейс "+f.number+(routeLabel(f)?" — "+routeLabel(f):""),
+        description:(f.terminal?"Терминал "+f.terminal:"")+
+          (f.checkinH||f.packH?"\nЯвка "+fmtTime(s.checkin)+", сборы "+fmtTime(s.pack):""),
+        alarms:alarms
       }]);
     };
   });
-  clearInterval(tickTimer);
-  tickTimer=setInterval(render,60000);
 }
 
+/* ---------- одиночный рейс ---------- */
 function formHTML(){
   var n=new Date(),def=n.toISOString().slice(0,10);
   return '<div class="form"><div class="frow"><div class="field"><label>Номер рейса</label>'+
     '<input id="fNum" placeholder="SU 1234"></div>'+
-    '<div class="field"><label>Маршрут</label><input id="fRoute" placeholder="Москва — Сочи"></div></div>'+
+    '<div class="field" style="flex:0 0 auto;align-self:flex-end"><button class="ghost" id="fLookup" type="button">найти рейс</button></div></div>'+
+    '<div class="frow"><div class="field"><label>Откуда</label><input id="fFrom" placeholder="Москва"></div>'+
+    '<div class="field"><label>Куда</label><input id="fTo" placeholder="Уфа"></div></div>'+
     '<div class="frow"><div class="field"><label>Дата вылета</label><input id="fDate" type="date" value="'+def+'"></div>'+
-    '<div class="field sm"><label>Время</label><input id="fTime" type="time" value="10:00"></div>'+
-    '<div class="field sm"><label>Терминал</label><input id="fTerm" placeholder="B"></div></div>'+
-    '<div class="margins"><div class="mfield"><label>Явка за, ч</label><input id="fCheckin" type="number" min="0" step="0.5" value="2"></div>'+
-    '<div class="mfield"><label>Сборы за, ч (до явки)</label><input id="fPack" type="number" min="0" step="0.5" value="2"></div></div>'+
+    '<div class="field sm"><label>Вылет</label><input id="fTime" type="time" value="10:00"></div>'+
+    '<div class="field sm"><label>Прилёт</label><input id="fArr" type="time"></div></div>'+
+    '<div class="margins"><div class="mfield"><label>Терминал</label><input id="fTerm" placeholder="B"></div>'+
+    '<div class="mfield"><label>Явка за, ч</label><input id="fCheckin" type="number" min="0" step="0.5" value="2"></div>'+
+    '<div class="mfield"><label>Сборы за, ч</label><input id="fPack" type="number" min="0" step="0.5" value="2"></div></div>'+
     '<div class="submit" id="fSave">Добавить рейс</div></div>';
+}
+var FLIGHT_LOOKUP_URL="";
+async function fetchFlightData(num,date){
+  if(!num){toast("Впишите номер рейса");return null;}
+  if(!FLIGHT_LOOKUP_URL){toast("Автопоиск не настроен — впишите данные вручную");return null;}
+  try{
+    var res=await fetch(FLIGHT_LOOKUP_URL+"?num="+encodeURIComponent(num)+"&date="+encodeURIComponent(date||""));
+    var data=await res.json();
+    if(!res.ok||data.error){toast("Рейс не найден — впишите вручную");return null;}
+    return data;
+  }catch(e){
+    toast("Не удалось получить данные — впишите вручную");return null;
+  }
 }
 function bindForm(){
   var s=document.getElementById("fSave");
   if(!s)return;
+  var lk=document.getElementById("fLookup");
+  if(lk)lk.onclick=async function(){
+    var num=document.getElementById("fNum").value.trim();
+    var date=document.getElementById("fDate").value;
+    lk.textContent="ищу…";
+    var data=await fetchFlightData(num,date);
+    if(data){
+      if(data.dep_time){
+        var parts=data.dep_time.split(" ");
+        document.getElementById("fDate").value=parts[0];
+        document.getElementById("fTime").value=(parts[1]||"").slice(0,5);
+      }
+      if(data.arr_time)document.getElementById("fArr").value=(data.arr_time.split(" ")[1]||"").slice(0,5);
+      if(data.dep_terminal)document.getElementById("fTerm").value=data.dep_terminal;
+      if(data.dep_iata)document.getElementById("fFrom").value=data.dep_iata;
+      if(data.arr_iata)document.getElementById("fTo").value=data.arr_iata;
+      toast("Данные подставлены — проверьте перед сохранением");
+    }
+    lk.textContent="найти рейс";
+  };
   s.onclick=function(){
     var num=document.getElementById("fNum").value.trim();
     var date=document.getElementById("fDate").value;
     var time=document.getElementById("fTime").value;
     if(!num||!date||!time){toast("Заполните номер, дату и время");return;}
     D.flights.push({
-      id:uid(),number:num,route:document.getElementById("fRoute").value.trim(),
-      date:date,time:time,terminal:document.getElementById("fTerm").value.trim(),
-      checkinH:parseFloat(document.getElementById("fCheckin").value)||2,
-      packH:parseFloat(document.getElementById("fPack").value)||2
+      id:uid(),number:num,
+      from:document.getElementById("fFrom").value.trim(),
+      to:document.getElementById("fTo").value.trim(),
+      date:date,time:time,
+      arrTime:document.getElementById("fArr").value||"",
+      terminal:document.getElementById("fTerm").value.trim(),
+      checkinH:parseFloat(document.getElementById("fCheckin").value)||0,
+      packH:parseFloat(document.getElementById("fPack").value)||0
     });
     showForm=false;save();render();
   };
 }
 
+/* ---------- кольцо ---------- */
+function blankLeg(date){return {number:"",from:"",to:"",date:date,time:"",arrTime:"",terminal:""};}
+function syncRingFromDOM(){
+  ringName=document.getElementById("rgName").value;
+  ringLegs.forEach(function(leg,i){
+    leg.number=val("rgNum"+i);leg.from=val("rgFrom"+i);leg.to=val("rgTo"+i);
+    leg.date=val("rgDate"+i);leg.time=val("rgTime"+i);leg.arrTime=val("rgArr"+i);
+    leg.terminal=val("rgTerm"+i);
+  });
+  function val(id){var el=document.getElementById(id);return el?el.value:"";}
+}
+function ringHTML(){
+  var h='<div class="form"><div class="frow"><div class="field"><label>Название поездки</label>'+
+    '<input id="rgName" placeholder="Уфа — Питер — Уфа" value="'+esc(ringName)+'"></div></div>';
+  ringLegs.forEach(function(leg,i){
+    h+='<div style="border-top:1px solid var(--hair);margin-top:12px;padding-top:12px">'+
+       '<div class="frow"><div class="field"><label>Рейс '+(i+1)+' — номер</label>'+
+       '<input id="rgNum'+i+'" value="'+esc(leg.number)+'" placeholder="SU 1234"></div>'+
+       '<div class="field" style="flex:0 0 auto;align-self:flex-end"><button class="ghost" data-rglookup="'+i+'" type="button">найти</button></div>'+
+       (ringLegs.length>1?'<div class="field" style="flex:0 0 auto;align-self:flex-end">'+
+         '<button class="del" data-rmleg="'+i+'" aria-label="Убрать рейс" style="font-size:20px">×</button></div>':"")+'</div>'+
+       '<div class="frow"><div class="field"><label>Откуда</label><input id="rgFrom'+i+'" value="'+esc(leg.from)+'" placeholder="Москва"></div>'+
+       '<div class="field"><label>Куда</label><input id="rgTo'+i+'" value="'+esc(leg.to)+'" placeholder="Уфа"></div></div>'+
+       '<div class="frow"><div class="field"><label>Дата</label><input id="rgDate'+i+'" type="date" value="'+esc(leg.date)+'"></div>'+
+       '<div class="field sm"><label>Вылет</label><input id="rgTime'+i+'" type="time" value="'+esc(leg.time)+'"></div>'+
+       '<div class="field sm"><label>Прилёт</label><input id="rgArr'+i+'" type="time" value="'+esc(leg.arrTime)+'"></div>'+
+       '<div class="field sm"><label>Терминал</label><input id="rgTerm'+i+'" value="'+esc(leg.terminal)+'"></div></div>'+
+       '</div>';
+  });
+  h+='<button class="toggle-form" id="rgAddLeg" style="margin-top:14px">+ ещё рейс</button>'+
+     '<div class="submit" id="rgSave" style="margin-top:14px">Сохранить кольцо</div>'+
+     '<button class="link" id="rgCancel" style="margin-top:10px">отмена</button></div>';
+  return h;
+}
+function bindRing(){
+  var add=document.getElementById("rgAddLeg");
+  if(!add)return;
+  add.onclick=function(){
+    syncRingFromDOM();
+    ringLegs.push(blankLeg(ringLegs.length?ringLegs[ringLegs.length-1].date:new Date().toISOString().slice(0,10)));
+    render();
+  };
+  app.querySelectorAll("[data-rmleg]").forEach(function(b){
+    b.onclick=function(){
+      syncRingFromDOM();
+      ringLegs.splice(+b.dataset.rmleg,1);
+      render();
+    };
+  });
+  app.querySelectorAll("[data-rglookup]").forEach(function(b){
+    b.onclick=async function(){
+      var i=+b.dataset.rglookup;
+      var num=document.getElementById("rgNum"+i).value.trim();
+      var date=document.getElementById("rgDate"+i).value;
+      b.textContent="ищу…";
+      var data=await fetchFlightData(num,date);
+      if(data){
+        if(data.dep_time){
+          var parts=data.dep_time.split(" ");
+          document.getElementById("rgDate"+i).value=parts[0];
+          document.getElementById("rgTime"+i).value=(parts[1]||"").slice(0,5);
+        }
+        if(data.arr_time)document.getElementById("rgArr"+i).value=(data.arr_time.split(" ")[1]||"").slice(0,5);
+        if(data.dep_terminal)document.getElementById("rgTerm"+i).value=data.dep_terminal;
+        if(data.dep_iata)document.getElementById("rgFrom"+i).value=data.dep_iata;
+        if(data.arr_iata)document.getElementById("rgTo"+i).value=data.arr_iata;
+        toast("Данные подставлены — проверьте перед сохранением");
+      }
+      b.textContent="найти";
+    };
+  });
+  document.getElementById("rgCancel").onclick=function(){showRing=false;render();};
+  document.getElementById("rgSave").onclick=function(){
+    syncRingFromDOM();
+    for(var i=0;i<ringLegs.length;i++){
+      var l=ringLegs[i];
+      if(!l.number.trim()||!l.date||!l.time){
+        toast("Заполните номер, дату и время у рейса "+(i+1));return;
+      }
+    }
+    var tripId=uid();
+    D.trips.push({id:tripId,name:ringName.trim()||"кольцо"});
+    ringLegs.forEach(function(l,i){
+      D.flights.push({
+        id:uid(),number:l.number.trim(),from:l.from.trim(),to:l.to.trim(),
+        date:l.date,time:l.time,arrTime:l.arrTime||"",terminal:l.terminal.trim(),
+        checkinH:i===0?2:0,packH:i===0?2:0,
+        tripId:tripId,legIndex:i
+      });
+    });
+    showRing=false;save();render();
+    toast("Кольцо добавлено");
+  };
+}
 
 return {render:render, stop:function(){clearInterval(tickTimer);}};
 })();

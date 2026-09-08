@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Планер</title>
+<meta name="theme-color" content="#EDEFEA">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Планер">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-512.png">
+<style>
+:root{
+  --bg:#EDEFEA; --card:#FFFFFF; --ink:#2B302C; --muted:#8B928C;
+  --hair:#E2E5DE; --plum:#6F5B7A; --plum-soft:#E7E1EC; --sage:#96A68C;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--bg);}
+body{color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0;}
+input,textarea{font:inherit;color:inherit;background:none;border:0;}
+:focus-visible{outline:2px solid var(--plum);outline-offset:3px;border-radius:2px;}
+
+.wrap{max-width:600px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top)) 20px
+  calc(64px + env(safe-area-inset-bottom));}
+
+.head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:26px;}
+.crumb{display:flex;align-items:baseline;gap:14px;}
+.back{color:var(--muted);font-size:15px;}
+.year-pick{display:flex;align-items:baseline;gap:10px;}
+.year-num{font-family:Georgia,"Times New Roman",serif;font-size:40px;font-weight:400;line-height:1;}
+.title{font-family:Georgia,"Times New Roman",serif;font-size:34px;font-weight:400;line-height:1;margin:0;}
+.step{color:var(--muted);font-size:20px;padding:0 4px;}
+.saved{font-size:12px;color:var(--muted);opacity:0;transition:opacity .3s;}
+.saved.on{opacity:1;}
+
+.sec{margin:0 0 34px;}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;
+  padding-bottom:8px;border-bottom:1px solid var(--hair);margin-bottom:14px;}
+.sec-t{font-size:14px;color:var(--muted);}
+.sec-n{font-size:13px;color:var(--muted);font-family:Georgia,serif;}
+
+.row{display:flex;align-items:flex-start;gap:12px;padding:9px 0;}
+.mark{width:18px;height:18px;flex:none;margin-top:3px;border:1px solid #C9CEC6;border-radius:50%;
+  transition:background .15s,border-color .15s;}
+.mark.on{background:var(--plum);border-color:var(--plum);}
+.mark.on::after{content:"";display:block;width:5px;height:9px;margin:2px auto 0;
+  border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(42deg);}
+.row-t{flex:1;min-width:0;word-break:break-word;}
+.row.done .row-t{color:var(--muted);text-decoration:line-through;text-decoration-color:#C9CEC6;}
+.row .del{color:#C9CEC6;font-size:17px;padding:0 2px;}
+
+.add{display:flex;align-items:center;gap:12px;padding:9px 0;}
+.add input{flex:1;border-bottom:1px solid var(--hair);padding:3px 0;}
+.add input::placeholder{color:#B4BBB3;}
+.add .dot{width:18px;height:18px;flex:none;border:1px dashed #CDD2C9;border-radius:50%;}
+
+.months{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--hair);
+  border:1px solid var(--hair);}
+.mcard{background:var(--card);padding:14px 14px 12px;text-align:left;min-height:78px;
+  display:flex;flex-direction:column;justify-content:space-between;}
+.mcard.now{background:#FBFAFC;}
+.mname{font-family:Georgia,serif;font-size:19px;}
+.mcard.now .mname{color:var(--plum);}
+.mmeta{color:var(--muted);font-size:12px;margin-top:8px;}
+.bar{height:2px;background:var(--hair);margin-top:8px;}
+.bar i{display:block;height:2px;background:var(--plum);}
+
+.evt{display:flex;gap:14px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--hair);}
+.evt-d{font-family:Georgia,serif;font-size:17px;color:var(--plum);min-width:52px;flex:none;}
+.evt-t{flex:1;}
+.evt-add{display:flex;gap:10px;align-items:center;padding:10px 0;}
+.evt-add select{border:1px solid var(--hair);border-radius:4px;padding:6px 8px;font-size:14px;}
+.evt-add input{flex:1;border-bottom:1px solid var(--hair);padding:4px 0;}
+
+.habit{margin-bottom:26px;}
+.habit-h{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px;}
+.habit-n{font-size:15px;}
+.habit-s{font-size:12px;color:var(--muted);}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;max-width:280px;}
+.cell{aspect-ratio:1;border:1px solid var(--hair);border-radius:3px;font-size:10px;
+  color:#B4BBB3;display:flex;align-items:center;justify-content:center;
+  transition:background .15s,border-color .15s;}
+.cell.pad{border:0;}
+.cell.on{background:var(--plum);border-color:var(--plum);color:transparent;}
+.cell.today{border-color:var(--plum);}
+.cell.future{opacity:.45;}
+
+.link{color:var(--plum);font-size:14px;text-decoration:underline;text-underline-offset:3px;}
+.tools{display:flex;flex-wrap:wrap;gap:16px;padding-top:8px;border-top:1px solid var(--hair);}
+.restore{width:100%;margin-top:10px;}
+.restore textarea{width:100%;height:76px;border:1px solid var(--hair);border-radius:4px;
+  padding:8px;font-size:13px;resize:vertical;}
+.restore-row{display:flex;gap:14px;margin-top:8px;}
+.empty{color:var(--muted);font-size:14px;padding:4px 0 8px;}
+
+.toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%);
+  background:var(--ink);color:#fff;padding:9px 16px;border-radius:20px;font-size:14px;z-index:20;}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+var MONTHS=["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
+var MONTHS_IN=["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
+var DOW=["пн","вт","ср","чт","пт","сб","вс"];
+var KEY="planner:v1";
+
+var now=new Date();
+var view="year", year=now.getFullYear(), month=now.getMonth();
+var D=load(), saveTimer=null;
+
+function load(){
+  try{var raw=localStorage.getItem(KEY);
+    if(raw){var o=JSON.parse(raw);
+      return {yearGoals:o.yearGoals||{},months:o.months||{},habits:o.habits||[],marks:o.marks||{}};}
+  }catch(e){}
+  return {yearGoals:{},months:{},habits:[],marks:{}};
+}
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{localStorage.setItem(KEY,JSON.stringify(D));
+      var s=document.querySelector(".saved");
+      if(s){s.classList.add("on");setTimeout(function(){s.classList.remove("on");},1300);}
+    }catch(e){toast("Не удалось сохранить");}
+  },350);
+}
+function uid(){return Math.random().toString(36).slice(2,9);}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function p2(n){return String(n).padStart(2,"0");}
+function key(y,m){return y+"-"+p2(m+1);}
+function dkey(y,m,d){return y+"-"+p2(m+1)+"-"+p2(d);}
+function daysIn(y,m){return new Date(y,m+1,0).getDate();}
+function firstDow(y,m){return (new Date(y,m,1).getDay()+6)%7;}
+function isToday(y,m,d){var n=new Date();return y===n.getFullYear()&&m===n.getMonth()&&d===n.getDate();}
+function isFuture(y,m,d){var n=new Date();n.setHours(0,0,0,0);return new Date(y,m,d)>n;}
+function mo(y,m){var k=key(y,m);if(!D.months[k])D.months[k]={goals:[],events:[]};return D.months[k];}
+function yg(y){if(!D.yearGoals[y])D.yearGoals[y]=[];return D.yearGoals[y];}
+function toast(msg){var t=document.createElement("div");t.className="toast";t.textContent=msg;
+  document.body.appendChild(t);setTimeout(function(){t.remove();},1800);}
+function copyText(text){
+  var done=function(ok){toast(ok?"Скопировано":"Скопировать не вышло");};
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(text).then(function(){done(true);},fb);
+  else fb();
+  function fb(){try{var ta=document.createElement("textarea");ta.value=text;
+    ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);
+    ta.select();ta.setSelectionRange(0,text.length);
+    var ok=document.execCommand("copy");document.body.removeChild(ta);done(ok);
+  }catch(e){done(false);}}
+}
+var app=document.getElementById("app");
+function render(){view==="year"?renderYear():renderMonth();window.scrollTo(0,0);}
+
+/* ─── список с галочками ─── */
+function goalRows(list,ph){
+  var h="";
+  list.forEach(function(g){
+    h+='<div class="row'+(g.done?" done":"")+'"><button class="mark'+(g.done?" on":"")+
+       '" data-toggle="'+g.id+'" aria-label="Отметить"></button>'+
+       '<span class="row-t">'+esc(g.text)+'</span>'+
+       '<button class="del" data-del="'+g.id+'" aria-label="Удалить">×</button></div>';
+  });
+  h+='<div class="add"><span class="dot"></span><input data-new="1" placeholder="'+ph+'"></div>';
+  return h;
+}
+function bindGoals(scope,list){
+  scope.querySelectorAll("[data-toggle]").forEach(function(b){
+    b.onclick=function(){
+      var g=list.filter(function(x){return x.id===b.dataset.toggle;})[0];
+      if(g){g.done=!g.done;save();render();}
+    };
+  });
+  scope.querySelectorAll("[data-del]").forEach(function(b){
+    b.onclick=function(){
+      var i=list.map(function(x){return x.id;}).indexOf(b.dataset.del);
+      if(i>=0){list.splice(i,1);save();render();}
+    };
+  });
+  var inp=scope.querySelector("[data-new]");
+  if(inp)inp.onkeydown=function(e){
+    if(e.key==="Enter"&&this.value.trim()){
+      list.push({id:uid(),text:this.value.trim(),done:false});save();render();
+    }
+  };
+}
+
+/* ─── год ─── */
+function renderYear(){
+  var goals=yg(year),h="";
+  h+='<div class="head"><div class="year-pick"><button class="step" id="yprev">‹</button>'+
+     '<span class="year-num">'+year+'</span><button class="step" id="ynext">›</button></div>'+
+     '<span class="saved">сохранено</span></div>';
+
+  var doneY=goals.filter(function(g){return g.done;}).length;
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">планы на год</span>'+
+     '<span class="sec-n">'+(goals.length?doneY+" / "+goals.length:"")+'</span></div>'+
+     goalRows(goals,"что важно за год")+'</section>';
+
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">месяцы</span></div><div class="months">';
+  for(var m=0;m<12;m++){
+    var d=D.months[key(year,m)]||{goals:[],events:[]};
+    var tot=d.goals.length,dn=d.goals.filter(function(g){return g.done;}).length;
+    var ev=d.events.length,meta=[];
+    if(tot)meta.push(dn+" из "+tot);
+    if(ev)meta.push(ev+" "+(ev===1?"дата":ev<5?"даты":"дат"));
+    h+='<button class="mcard'+(year===now.getFullYear()&&m===now.getMonth()?" now":"")+'" data-m="'+m+'">'+
+       '<span class="mname">'+MONTHS[m]+'</span><span class="mmeta">'+(meta.join(" · ")||"—")+'</span>'+
+       (tot?'<span class="bar"><i style="width:'+Math.round(dn/tot*100)+'%"></i></span>':"")+'</button>';
+  }
+  h+='</div></section>';
+
+  h+='<div class="tools"><button class="link" id="exp">Скопировать данные</button>'+
+     '<button class="link" id="imp">Восстановить из копии</button><div id="impBox" class="restore"></div></div>';
+  app.innerHTML=h;
+
+  document.getElementById("yprev").onclick=function(){year--;render();};
+  document.getElementById("ynext").onclick=function(){year++;render();};
+  app.querySelectorAll("[data-m]").forEach(function(b){
+    b.onclick=function(){month=+b.dataset.m;view="month";render();};
+  });
+  bindGoals(app,goals);
+  document.getElementById("exp").onclick=function(){copyText(JSON.stringify(D));};
+  document.getElementById("imp").onclick=function(){
+    var box=document.getElementById("impBox");
+    box.innerHTML='<textarea id="impT" placeholder="Вставьте сюда скопированные данные"></textarea>'+
+      '<div class="restore-row"><button class="link" id="impGo">Восстановить</button>'+
+      '<button class="link" id="impNo">Отмена</button></div>';
+    document.getElementById("impNo").onclick=function(){box.innerHTML="";};
+    document.getElementById("impGo").onclick=function(){
+      try{var o=JSON.parse(document.getElementById("impT").value);
+        if(!o||typeof o!=="object")throw 0;
+        D={yearGoals:o.yearGoals||{},months:o.months||{},habits:o.habits||[],marks:o.marks||{}};
+        save();render();toast("Данные восстановлены");
+      }catch(e){toast("Это не похоже на копию данных");}
+    };
+  };
+}
+
+/* ─── месяц ─── */
+function renderMonth(){
+  var m=mo(year,month),n=daysIn(year,month),h="";
+  h+='<div class="head"><div class="crumb"><button class="back" id="back">'+year+'</button>'+
+     '<h1 class="title">'+MONTHS[month]+'</h1></div><span class="saved">сохранено</span></div>';
+
+  var dn=m.goals.filter(function(g){return g.done;}).length;
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">цели месяца</span>'+
+     '<span class="sec-n">'+(m.goals.length?dn+" / "+m.goals.length:"")+'</span></div>'+
+     goalRows(m.goals,"цель на месяц")+'</section>';
+
+  var evs=m.events.slice().sort(function(a,b){return a.day-b.day;});
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">важные даты</span></div>';
+  if(!evs.length)h+='<p class="empty">Пока ничего не отмечено.</p>';
+  evs.forEach(function(e){
+    h+='<div class="evt"><span class="evt-d">'+e.day+" "+MONTHS_IN[month].slice(0,3)+'</span>'+
+       '<span class="evt-t">'+esc(e.text)+'</span>'+
+       '<button class="del" data-ed="'+e.id+'" aria-label="Удалить">×</button></div>';
+  });
+  h+='<div class="evt-add"><select id="evDay">';
+  for(var d=1;d<=n;d++)h+='<option value="'+d+'"'+(isToday(year,month,d)?" selected":"")+'>'+d+'</option>';
+  h+='</select><input id="evText" placeholder="что за день"></div></section>';
+
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">привычки</span>'+
+     '<span class="sec-n">'+MONTHS[month]+'</span></div>';
+  if(!D.habits.length)h+='<p class="empty">Добавьте привычку — появится сетка на месяц.</p>';
+  D.habits.forEach(function(hb){
+    var marks=D.marks[hb.id]||{},cnt=0,streak=0;
+    for(var d=1;d<=n;d++)if(marks[dkey(year,month,d)])cnt++;
+    var probe=new Date();probe.setHours(0,0,0,0);
+    if(!marks[dkey(probe.getFullYear(),probe.getMonth(),probe.getDate())])probe.setDate(probe.getDate()-1);
+    while(marks[dkey(probe.getFullYear(),probe.getMonth(),probe.getDate())]){streak++;probe.setDate(probe.getDate()-1);}
+    h+='<div class="habit"><div class="habit-h"><span class="habit-n">'+esc(hb.name)+'</span>'+
+       '<span class="habit-s">'+cnt+" из "+n+(streak>1?" · серия "+streak:"")+
+       ' <button class="del" data-hd="'+hb.id+'" aria-label="Удалить привычку">×</button></span></div><div class="grid">';
+    for(var i=0;i<firstDow(year,month);i++)h+='<span class="cell pad"></span>';
+    for(var d2=1;d2<=n;d2++){
+      var k=dkey(year,month,d2);
+      h+='<button class="cell'+(marks[k]?" on":"")+(isToday(year,month,d2)?" today":"")+
+         (isFuture(year,month,d2)?" future":"")+'" data-hb="'+hb.id+'" data-d="'+k+'">'+d2+'</button>';
+    }
+    h+='</div></div>';
+  });
+  h+='<div class="add"><span class="dot"></span><input id="newHabit" placeholder="новая привычка"></div></section>';
+
+  h+='<div class="tools"><button class="link" id="back2">← '+year+'</button></div>';
+  app.innerHTML=h;
+
+  document.getElementById("back").onclick=document.getElementById("back2").onclick=
+    function(){view="year";render();};
+  bindGoals(app,m.goals);
+
+  app.querySelectorAll("[data-ed]").forEach(function(b){
+    b.onclick=function(){
+      m.events=m.events.filter(function(e){return e.id!==b.dataset.ed;});save();render();
+    };
+  });
+  document.getElementById("evText").onkeydown=function(e){
+    if(e.key==="Enter"&&this.value.trim()){
+      m.events.push({id:uid(),day:+document.getElementById("evDay").value,text:this.value.trim()});
+      save();render();
+    }
+  };
+  app.querySelectorAll("[data-hb]").forEach(function(b){
+    b.onclick=function(){
+      var id=b.dataset.hb,k=b.dataset.d;
+      if(!D.marks[id])D.marks[id]={};
+      if(D.marks[id][k])delete D.marks[id][k];else D.marks[id][k]=true;
+      save();
+      b.classList.toggle("on");
+      var hd=b.closest(".habit").querySelector(".habit-s");
+      var cnt=0;for(var d=1;d<=n;d++)if(D.marks[id][dkey(year,month,d)])cnt++;
+      hd.firstChild.textContent=cnt+" из "+n+" ";
+    };
+  });
+  app.querySelectorAll("[data-hd]").forEach(function(b){
+    b.onclick=function(){
+      D.habits=D.habits.filter(function(x){return x.id!==b.dataset.hd;});
+      delete D.marks[b.dataset.hd];save();render();
+    };
+  });
+  document.getElementById("newHabit").onkeydown=function(e){
+    if(e.key==="Enter"&&this.value.trim()){
+      D.habits.push({id:uid(),name:this.value.trim()});save();render();
+    }
+  };
+}
+
+render();
+if("serviceWorker" in navigator)
+  window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});
+</script>
+</body>
+</html>

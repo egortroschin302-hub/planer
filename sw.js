@@ -1,4 +1,4 @@
-var CACHE = "planner-combo-v16";
+var CACHE = "planner-combo-v17";
 var FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-512.png"];
 
 self.addEventListener("install", function (e) {

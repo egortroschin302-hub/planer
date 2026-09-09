@@ -1541,10 +1541,8 @@ function fmtShortDate(d){var mm=["янв","фев","мар","апр","мая","�
   return d.getDate()+" "+mm[d.getMonth()];}
 
 function incomeBreakdown(inc,allIncomesSorted,budgetsM,totalMonthIncome,rentCat,rentAmount){
-  var idx=allIncomesSorted.findIndex(function(x){return x.id===inc.id;});
-  var next=allIncomesSorted[idx+1];
   var periodStart=new Date(inc.date);
-  var periodEnd=next?new Date(next.date):(function(){
+  var periodEnd=(function(){
     var d=new Date(inc.date);d.setMonth(d.getMonth()+1);d.setDate(1);return d;
   })();
   var days=Math.max(1,Math.round((periodEnd-periodStart)/86400000));
@@ -1568,7 +1566,7 @@ function incomeBreakdown(inc,allIncomesSorted,budgetsM,totalMonthIncome,rentCat,
 
   var free=Math.max(0,+inc.amount-allocated);
   return {periodStart:periodStart,periodEnd:periodEnd,days:days,lines:lines,allocated:allocated,free:free,
-    perDay:free/days,isLastKnown:!next};
+    perDay:free/days};
 }
 
 var app=document.getElementById("content");
@@ -1603,7 +1601,7 @@ function render(){
       var bd=incomeBreakdown(i,incomesSorted,budgetsM,totalIncome,rentCatEarly,rentAmountEarly);
       h+='<div class="sum" style="margin:0 0 12px 30px;padding:10px 12px;background:var(--plum-soft);border-radius:8px">'+
          "период: "+fmtShortDate(bd.periodStart)+" – "+fmtShortDate(bd.periodEnd)+" ("+bd.days+" "+
-         plural(bd.days,"день","дня","дней")+")"+(bd.isLastKnown?" — оценка, добавьте следующий доход для точности":"")+"<br>";
+         plural(bd.days,"день","дня","дней")+")<br>";
       if(bd.lines.length){
         h+="<br>по плану уйдёт:<br>";
         bd.lines.forEach(function(l){h+="&nbsp;&nbsp;"+esc(l.name)+": "+money(l.amount)+"<br>";});

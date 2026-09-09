@@ -1484,10 +1484,11 @@ function load(){
       return {
         categories:o.categories&&o.categories.length?o.categories:defaultCats(),
         incomes:o.incomes||[], expenses:o.expenses||[],
-        budgets:o.budgets||{}, debtTotal:o.debtTotal||null, savingsGoal:o.savingsGoal||null
+        budgets:o.budgets||{}, debtTotal:o.debtTotal||null, savingsGoal:o.savingsGoal||null,
+        rentDay:o.rentDay||10
       };}
   }catch(e){}
-  return {categories:defaultCats(),incomes:[],expenses:[],budgets:{},debtTotal:null,savingsGoal:null};
+  return {categories:defaultCats(),incomes:[],expenses:[],budgets:{},debtTotal:null,savingsGoal:null,rentDay:10};
 }
 function defaultCats(){
   return [
@@ -1497,7 +1498,7 @@ function defaultCats(){
     {id:"smoke",name:"Курение"},
     {id:"debt",name:"Долг",isDebt:true},
     {id:"savings",name:"Накопления",isSaving:true},
-    {id:"rent",name:"Жильё"}
+    {id:"rent",name:"Жильё",isRent:true}
   ];
 }
 function save(){
@@ -1576,7 +1577,8 @@ function render(){
     var over=planned>0&&spentC>planned;
     h+='<div class="habit"><div class="habit-h"><span class="habit-n">'+esc(c.name)+
        (c.isDebt?' <span class="evt-y">долг</span>':"")+
-       (c.isSaving?' <span class="evt-y">накопления</span>':"")+'</span>'+
+       (c.isSaving?' <span class="evt-y">накопления</span>':"")+
+       (c.isRent?' <span class="evt-y">аренда</span>':"")+'</span>'+
        '<button class="del" data-delcat="'+c.id+'" aria-label="Удалить категорию">×</button></div>'+
        '<div class="frow" style="margin:4px 0 6px"><div class="field sm"><label>План, ₽</label>'+
        '<input type="number" min="0" data-plan="'+c.id+'" value="'+(planned||"")+'" placeholder="0"></div>'+
@@ -1587,7 +1589,8 @@ function render(){
   });
   h+='<div class="add"><span class="dot"></span><input id="newCat" placeholder="новая категория">'+
      '<select id="newCatType" style="flex:0 0 auto;margin-left:8px;font-size:13px">'+
-     '<option value="">обычная</option><option value="debt">долг</option><option value="saving">накопления</option></select>'+
+     '<option value="">обычная</option><option value="debt">долг</option>'+
+     '<option value="saving">накопления</option><option value="rent">аренда</option></select>'+
      '<button class="link" id="newCatBtn" style="flex:0 0 auto">добавить</button></div>'+
      '</section>';
 
@@ -1645,6 +1648,34 @@ function render(){
     h+='</section>';
   }
 
+  var rentCat=D.categories.filter(function(c){return c.isRent;})[0];
+  if(rentCat){
+    var rentAmount=+budgetsM[rentCat.id]||0;
+    h+='<section class="sec"><div class="sec-h"><span class="sec-t">аренда «'+esc(rentCat.name)+'»</span></div>'+
+       '<div class="frow"><div class="field sm"><label>День оплаты</label>'+
+       '<input type="number" min="1" max="31" id="rentDay" value="'+(D.rentDay||"")+'"></div>'+
+       '<div class="field" style="align-self:flex-end;padding-bottom:6px"><span class="habit-s">'+
+       (rentAmount?"сумма аренды "+money(rentAmount)+" (из плана категории)":"впишите план для «"+esc(rentCat.name)+"» выше")+
+       '</span></div></div>';
+    if(rentAmount&&D.rentDay){
+      var before=incomesM.filter(function(i){return i.date&&(+i.date.slice(8,10)||99)<=D.rentDay;})
+        .sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
+      var sumBefore=before.reduce(function(s,i){return s+(+i.amount||0);},0);
+      if(!before.length){
+        h+='<p class="hint">Пока нет доходов до '+D.rentDay+' числа — добавьте их выше, и здесь появится расчёт.</p>';
+      } else {
+        h+='<div class="sum">';
+        before.forEach(function(i){
+          var share=sumBefore>0?Math.round(rentAmount*(+i.amount/sumBefore)):0;
+          h+=esc(i.name)+" ("+i.date.slice(8,10)+"."+i.date.slice(5,7)+"): отложить <b>"+money(share)+"</b><br>";
+        });
+        h+='</div>';
+        if(sumBefore<rentAmount)
+          h+='<p class="hint" style="color:var(--red)">Доходов до дня оплаты не хватает на всю аренду — не хватает '+money(rentAmount-sumBefore)+'.</p>';
+      }
+    }
+    h+='</section>';
+  }
   var free=totalIncome-totalSpent;
   h+='<section class="sec"><div class="sec-h"><span class="sec-t">итоги месяца</span>'+
      '<button class="sec-a" id="copyBudget">скопировать</button></div><div class="sum">'+
@@ -1710,7 +1741,8 @@ function bind(mk,incomesM,expensesM){
     var type=document.getElementById("newCatType").value;
     if(type==="debt")D.categories.forEach(function(c){c.isDebt=false;});
     if(type==="saving")D.categories.forEach(function(c){c.isSaving=false;});
-    D.categories.push({id:uid(),name:name,isDebt:type==="debt",isSaving:type==="saving"});
+    if(type==="rent")D.categories.forEach(function(c){c.isRent=false;});
+    D.categories.push({id:uid(),name:name,isDebt:type==="debt",isSaving:type==="saving",isRent:type==="rent"});
     save();render();
   };
 
@@ -1736,6 +1768,12 @@ function bind(mk,incomesM,expensesM){
   var sg=document.getElementById("savingsGoal");
   if(sg)sg.oninput=function(){
     D.savingsGoal=+sg.value||null;save();
+    clearTimeout(planRenderTimer);
+    planRenderTimer=setTimeout(render,700);
+  };
+  var rd=document.getElementById("rentDay");
+  if(rd)rd.oninput=function(){
+    D.rentDay=Math.min(31,Math.max(1,+rd.value||10));save();
     clearTimeout(planRenderTimer);
     planRenderTimer=setTimeout(render,700);
   };

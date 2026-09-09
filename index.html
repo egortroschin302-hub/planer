@@ -85,9 +85,10 @@ input,textarea,select{font:inherit;color:inherit;background:none;border:0;}
 
 .topbar{position:sticky;top:0;z-index:6;background:var(--bg);
   padding:calc(16px + env(safe-area-inset-top)) 20px 0;max-width:620px;margin:0 auto;}
-.topbar-row{display:flex;align-items:center;justify-content:space-between;}
-.tabs{display:flex;gap:20px;}
-.tab{padding:6px 0 10px;color:var(--muted);border-bottom:2px solid transparent;font-size:15px;}
+.topbar-row{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.tabs{display:flex;gap:14px;overflow-x:auto;flex:1;min-width:0;-ms-overflow-style:none;scrollbar-width:none;}
+.tabs::-webkit-scrollbar{display:none;}
+.tab{padding:6px 0 10px;color:var(--muted);border-bottom:2px solid transparent;font-size:15px;flex:none;white-space:nowrap;}
 .tab.active{color:var(--ink);border-bottom-color:var(--plum);}
 .reset-link{color:var(--muted);font-size:11px;text-decoration:underline;text-underline-offset:2px;
   padding:6px 0 2px;display:inline-block;}
@@ -325,7 +326,7 @@ html[data-theme="dark"] .switch .knob{transform:translateX(18px);}
       <button class="tab" data-tab="flights">Рейсы</button>
       <button class="tab" data-tab="budget">Бюджет</button>
     </nav>
-    <div style="display:flex;align-items:center">
+    <div style="display:flex;align-items:center;flex:none">
       <button class="season-btn" id="seasonBtn">осень</button>
       <button class="switch" id="themeSwitch" aria-label="Переключить тему"><span class="knob">☀</span></button>
     </div>
@@ -1476,7 +1477,7 @@ var KEY="budget:v1";
 var MONTHS=["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
 var now0=new Date();
 var year=now0.getFullYear(),month=now0.getMonth();
-var D=load(),saveTimer=null,adding=false;
+var D=load(),saveTimer=null,adding=false,openInc="";
 
 function load(){
   try{var raw=localStorage.getItem(KEY);
@@ -1514,6 +1515,7 @@ function uid(){return Math.random().toString(36).slice(2,9);}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){
   return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function p2(n){return String(n).padStart(2,"0");}
+function plural(n,a,b,c){var x=n%100;if(x>4&&x<21)return c;x=n%10;return x===1?a:(x>1&&x<5?b:c);}
 function mkey(y,m){return y+"-"+p2(m+1);}
 function toast(msg){var t=document.createElement("div");t.className="toast";t.textContent=msg;
   document.body.appendChild(t);setTimeout(function(){t.remove();},1800);}
@@ -1534,6 +1536,41 @@ function inMonth(dateStr){
 }
 function catName(id){var c=D.categories.filter(function(x){return x.id===id;})[0];return c?c.name:"без категории";}
 
+function addDaysStr(dateStr,n){var d=new Date(dateStr);d.setDate(d.getDate()+n);return d;}
+function fmtShortDate(d){var mm=["янв","фев","мар","апр","мая","июн","июл","авг","сен","окт","ноя","дек"];
+  return d.getDate()+" "+mm[d.getMonth()];}
+
+function incomeBreakdown(inc,allIncomesSorted,budgetsM,totalMonthIncome,rentCat,rentAmount){
+  var idx=allIncomesSorted.findIndex(function(x){return x.id===inc.id;});
+  var next=allIncomesSorted[idx+1];
+  var periodStart=new Date(inc.date);
+  var periodEnd=next?new Date(next.date):(function(){
+    var d=new Date(inc.date);d.setMonth(d.getMonth()+1);d.setDate(1);return d;
+  })();
+  var days=Math.max(1,Math.round((periodEnd-periodStart)/86400000));
+
+  var lines=[],allocated=0;
+  var incDay=+inc.date.slice(8,10);
+
+  if(rentCat&&rentAmount&&D.rentDay&&incDay<=D.rentDay){
+    var beforeAll=allIncomesSorted.filter(function(x){return +x.date.slice(8,10)<=D.rentDay;});
+    var sumBefore=beforeAll.reduce(function(s,x){return s+(+x.amount||0);},0);
+    var rShare=sumBefore>0?Math.round(rentAmount*(+inc.amount/sumBefore)):0;
+    if(rShare>0){lines.push({name:rentCat.name,amount:rShare});allocated+=rShare;}
+  }
+  D.categories.forEach(function(c){
+    if(c.isRent)return;
+    var plan=+budgetsM[c.id]||0;
+    if(!plan||!totalMonthIncome)return;
+    var share=Math.round(plan*(+inc.amount/totalMonthIncome));
+    if(share>0){lines.push({name:c.name,amount:share});allocated+=share;}
+  });
+
+  var free=Math.max(0,+inc.amount-allocated);
+  return {periodStart:periodStart,periodEnd:periodEnd,days:days,lines:lines,allocated:allocated,free:free,
+    perDay:free/days,isLastKnown:!next};
+}
+
 var app=document.getElementById("content");
 
 function render(){
@@ -1542,6 +1579,9 @@ function render(){
   var expensesM=D.expenses.filter(function(e){return inMonth(e.date);});
   var budgetsM=D.budgets[mk]||{};
   var totalIncome=incomesM.reduce(function(s,i){return s+(+i.amount||0);},0);
+  var rentCatEarly=D.categories.filter(function(c){return c.isRent;})[0];
+  var rentAmountEarly=rentCatEarly?(+budgetsM[rentCatEarly.id]||0):0;
+  var incomesSorted=incomesM.slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"");});
   var totalPlanned=D.categories.reduce(function(s,c){return s+(+budgetsM[c.id]||0);},0);
   var totalSpent=expensesM.reduce(function(s,e){return s+(+e.amount||0);},0);
 
@@ -1553,11 +1593,25 @@ function render(){
   h+='<section class="sec"><div class="sec-h"><span class="sec-t">доходы месяца</span>'+
      '<span class="sec-n">'+money(totalIncome)+'</span></div>';
   if(!incomesM.length)h+=emptyBlockLocal("Пока не внесли доходы этого месяца.");
-  incomesM.slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"");}).forEach(function(i){
+  incomesSorted.forEach(function(i){
     h+='<div class="row"><span class="row-t">'+esc(i.name)+
        (i.date?' <span class="sub-n">'+i.date.slice(8,10)+"."+i.date.slice(5,7)+'</span>':"")+'</span>'+
        '<span class="stage-time" style="margin-right:8px">'+money(i.amount)+'</span>'+
-       '<button class="del" data-delinc="'+i.id+'" aria-label="Удалить">×</button></div>';
+       '<button class="del" data-delinc="'+i.id+'" aria-label="Удалить">×</button></div>'+
+       '<button class="link" data-incbreak="'+i.id+'" style="margin:0 0 8px 30px">на что хватит</button>';
+    if(openInc===i.id){
+      var bd=incomeBreakdown(i,incomesSorted,budgetsM,totalIncome,rentCatEarly,rentAmountEarly);
+      h+='<div class="sum" style="margin:0 0 12px 30px;padding:10px 12px;background:var(--plum-soft);border-radius:8px">'+
+         "период: "+fmtShortDate(bd.periodStart)+" – "+fmtShortDate(bd.periodEnd)+" ("+bd.days+" "+
+         plural(bd.days,"день","дня","дней")+")"+(bd.isLastKnown?" — оценка, добавьте следующий доход для точности":"")+"<br>";
+      if(bd.lines.length){
+        h+="<br>по плану уйдёт:<br>";
+        bd.lines.forEach(function(l){h+="&nbsp;&nbsp;"+esc(l.name)+": "+money(l.amount)+"<br>";});
+        h+="всего по плану: "+money(bd.allocated)+"<br>";
+      }
+      h+="<br><b>свободно на этот период: "+money(bd.free)+"</b><br>"+
+         "≈ "+money(Math.round(bd.perDay))+" в день</div>";
+    }
   });
   h+='<div class="frow" style="margin-top:8px"><div class="field"><label>Название</label>'+
      '<input id="incName" placeholder="Аванс, Зарплата…"></div>'+
@@ -1568,8 +1622,9 @@ function render(){
   if(!incomesM.length)h+='<button class="link" id="copyPrevInc" style="margin-top:10px;margin-left:14px">скопировать доходы с прошлого месяца</button>';
   h+='</section>';
 
-  h+='<section class="sec"><div class="sec-h"><span class="sec-t">план по категориям</span>'+
+  h+='<section class="sec" id="planSection"><div class="sec-h"><span class="sec-t">план по категориям</span>'+
      '<span class="sec-n">'+money(totalPlanned)+' из '+money(totalIncome)+'</span></div>';
+  if(incomesM.length)h+='<p class="hint" style="margin-top:-4px">Сколько потратите на каждую категорию до следующего дохода?</p>';
   D.categories.forEach(function(c){
     var planned=+budgetsM[c.id]||0;
     var spentC=expensesM.filter(function(e){return e.catId===c.id;}).reduce(function(s,e){return s+(+e.amount||0);},0);
@@ -1699,11 +1754,18 @@ function bind(mk,incomesM,expensesM){
     var amt=+document.getElementById("incAmt").value||0;
     var date=document.getElementById("incDate").value;
     if(!name||!amt){toast("Впишите название и сумму");return;}
-    D.incomes.push({id:uid(),name:name,amount:amt,date:date});
+    var newInc={id:uid(),name:name,amount:amt,date:date};
+    D.incomes.push(newInc);
+    openInc=newInc.id;
     save();render();
+    var sec=document.getElementById("planSection");
+    if(sec)sec.scrollIntoView({behavior:"smooth",block:"start"});
   };
   app.querySelectorAll("[data-delinc]").forEach(function(b){
     b.onclick=function(){D.incomes=D.incomes.filter(function(i){return i.id!==b.dataset.delinc;});save();render();};
+  });
+  app.querySelectorAll("[data-incbreak]").forEach(function(b){
+    b.onclick=function(){openInc=openInc===b.dataset.incbreak?"":b.dataset.incbreak;render();};
   });
   var cpi=document.getElementById("copyPrevInc");
   if(cpi)cpi.onclick=function(){

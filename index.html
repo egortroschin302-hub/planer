@@ -323,6 +323,7 @@ html[data-theme="dark"] .switch .knob{transform:translateX(18px);}
       <button class="tab active" data-tab="planner">Планер</button>
       <button class="tab" data-tab="week">Неделя</button>
       <button class="tab" data-tab="flights">Рейсы</button>
+      <button class="tab" data-tab="budget">Бюджет</button>
     </nav>
     <div style="display:flex;align-items:center">
       <button class="season-btn" id="seasonBtn">осень</button>
@@ -1470,6 +1471,293 @@ function bind(evs){
 return {render:render};
 })();
 
+var Budget=(function(){
+var KEY="budget:v1";
+var MONTHS=["январь","февраль","март","апрель","май","июнь","июль","август","сентябрь","октябрь","ноябрь","декабрь"];
+var now0=new Date();
+var year=now0.getFullYear(),month=now0.getMonth();
+var D=load(),saveTimer=null,adding=false;
+
+function load(){
+  try{var raw=localStorage.getItem(KEY);
+    if(raw){var o=JSON.parse(raw);
+      return {
+        categories:o.categories&&o.categories.length?o.categories:defaultCats(),
+        incomes:o.incomes||[], expenses:o.expenses||[],
+        budgets:o.budgets||{}, debtTotal:o.debtTotal||null, savingsGoal:o.savingsGoal||null
+      };}
+  }catch(e){}
+  return {categories:defaultCats(),incomes:[],expenses:[],budgets:{},debtTotal:null,savingsGoal:null};
+}
+function defaultCats(){
+  return [
+    {id:"food",name:"Продукты"},
+    {id:"utility",name:"Коммуналка"},
+    {id:"gas",name:"Бензин"},
+    {id:"smoke",name:"Курение"},
+    {id:"debt",name:"Долг",isDebt:true},
+    {id:"savings",name:"Накопления",isSaving:true},
+    {id:"rent",name:"Жильё"}
+  ];
+}
+function save(){
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{localStorage.setItem(KEY,JSON.stringify(D));
+      var s=document.querySelector(".saved");
+      if(s){s.classList.add("on");setTimeout(function(){s.classList.remove("on");},1300);}
+    }catch(e){toast("Не удалось сохранить");}
+  },300);
+}
+function uid(){return Math.random().toString(36).slice(2,9);}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function p2(n){return String(n).padStart(2,"0");}
+function mkey(y,m){return y+"-"+p2(m+1);}
+function toast(msg){var t=document.createElement("div");t.className="toast";t.textContent=msg;
+  document.body.appendChild(t);setTimeout(function(){t.remove();},1800);}
+function copyText(text){
+  var done=function(ok){toast(ok?"Скопировано":"Скопировать не вышло");};
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    navigator.clipboard.writeText(text).then(function(){done(true);},fb);else fb();
+  function fb(){try{var ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";
+    ta.style.opacity="0";document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,text.length);
+    var ok=document.execCommand("copy");document.body.removeChild(ta);done(ok);}catch(e){done(false);}}
+}
+function money(n){
+  n=Math.round(n||0);
+  return n.toLocaleString("ru-RU")+" ₽";
+}
+function inMonth(dateStr){
+  return dateStr&&dateStr.slice(0,7)===mkey(year,month);
+}
+function catName(id){var c=D.categories.filter(function(x){return x.id===id;})[0];return c?c.name:"без категории";}
+
+var app=document.getElementById("content");
+
+function render(){
+  var mk=mkey(year,month);
+  var incomesM=D.incomes.filter(function(i){return inMonth(i.date);});
+  var expensesM=D.expenses.filter(function(e){return inMonth(e.date);});
+  var budgetsM=D.budgets[mk]||{};
+  var totalIncome=incomesM.reduce(function(s,i){return s+(+i.amount||0);},0);
+  var totalPlanned=D.categories.reduce(function(s,c){return s+(+budgetsM[c.id]||0);},0);
+  var totalSpent=expensesM.reduce(function(s,e){return s+(+e.amount||0);},0);
+
+  var h="";
+  h+='<div class="head"><div class="crumb"><button class="step" id="bprev">‹</button>'+
+     '<h1 class="title">'+MONTHS[month]+" "+year+'</h1><button class="step" id="bnext">›</button></div>'+
+     '<span class="saved">сохранено</span></div>';
+
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">доходы месяца</span>'+
+     '<span class="sec-n">'+money(totalIncome)+'</span></div>';
+  if(!incomesM.length)h+=emptyBlockLocal("Пока не внесли доходы этого месяца.");
+  incomesM.slice().sort(function(a,b){return (a.date||"").localeCompare(b.date||"");}).forEach(function(i){
+    h+='<div class="row"><span class="row-t">'+esc(i.name)+
+       (i.date?' <span class="sub-n">'+i.date.slice(8,10)+"."+i.date.slice(5,7)+'</span>':"")+'</span>'+
+       '<span class="stage-time" style="margin-right:8px">'+money(i.amount)+'</span>'+
+       '<button class="del" data-delinc="'+i.id+'" aria-label="Удалить">×</button></div>';
+  });
+  h+='<div class="frow" style="margin-top:8px"><div class="field"><label>Название</label>'+
+     '<input id="incName" placeholder="Аванс, Зарплата…"></div>'+
+     '<div class="field sm"><label>Дата</label><input id="incDate" type="date" value="'+
+     mk+"-"+p2(Math.min(now0.getDate(),28))+'"></div>'+
+     '<div class="field sm"><label>Сумма</label><input id="incAmt" type="number" min="0" placeholder="0"></div></div>'+
+     '<button class="submit" id="incSave" style="margin-top:8px">Добавить доход</button>';
+  if(!incomesM.length)h+='<button class="link" id="copyPrevInc" style="margin-top:10px;margin-left:14px">скопировать доходы с прошлого месяца</button>';
+  h+='</section>';
+
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">план по категориям</span>'+
+     '<span class="sec-n">'+money(totalPlanned)+' из '+money(totalIncome)+'</span></div>';
+  D.categories.forEach(function(c){
+    var planned=+budgetsM[c.id]||0;
+    var spentC=expensesM.filter(function(e){return e.catId===c.id;}).reduce(function(s,e){return s+(+e.amount||0);},0);
+    var pct=planned>0?Math.min(100,Math.round(spentC/planned*100)):(spentC>0?100:0);
+    var over=planned>0&&spentC>planned;
+    h+='<div class="habit"><div class="habit-h"><span class="habit-n">'+esc(c.name)+
+       (c.isDebt?' <span class="evt-y">долг</span>':"")+
+       (c.isSaving?' <span class="evt-y">накопления</span>':"")+'</span>'+
+       '<button class="del" data-delcat="'+c.id+'" aria-label="Удалить категорию">×</button></div>'+
+       '<div class="frow" style="margin:4px 0 6px"><div class="field sm"><label>План, ₽</label>'+
+       '<input type="number" min="0" data-plan="'+c.id+'" value="'+(planned||"")+'" placeholder="0"></div>'+
+       '<div class="field" style="align-self:flex-end;padding-bottom:6px">'+
+       '<span class="habit-s">потрачено '+money(spentC)+(planned?" из "+money(planned):"")+'</span></div></div>'+
+       (planned?'<div class="bar"><i style="width:'+pct+'%;background:'+(over?"var(--red)":"var(--plum)")+'"></i></div>':"")+
+       '</div>';
+  });
+  h+='<div class="add"><span class="dot"></span><input id="newCat" placeholder="новая категория">'+
+     '<select id="newCatType" style="flex:0 0 auto;margin-left:8px;font-size:13px">'+
+     '<option value="">обычная</option><option value="debt">долг</option><option value="saving">накопления</option></select>'+
+     '<button class="link" id="newCatBtn" style="flex:0 0 auto">добавить</button></div>'+
+     '</section>';
+
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">добавить трату</span></div>'+
+     '<div class="frow"><div class="field"><label>Категория</label><select id="expCat">'+
+     D.categories.map(function(c){return '<option value="'+c.id+'">'+esc(c.name)+'</option>';}).join("")+
+     '</select></div><div class="field sm"><label>Сумма</label><input id="expAmt" type="number" min="0" placeholder="0"></div></div>'+
+     '<div class="frow"><div class="field"><label>Дата</label><input id="expDate" type="date" value="'+
+     now0.toISOString().slice(0,10)+'"></div>'+
+     '<div class="field"><label>Комментарий</label><input id="expNote" placeholder="необязательно"></div></div>'+
+     '<button class="submit" id="expSave">Добавить трату</button></section>';
+
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">траты месяца</span><span class="sec-n">'+
+     (expensesM.length||"")+'</span></div>';
+  if(!expensesM.length)h+=emptyBlockLocal("Пока нет трат в этом месяце.");
+  expensesM.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"");}).forEach(function(e){
+    h+='<div class="evt"><span class="evt-d">'+(e.date?e.date.slice(8,10)+"."+e.date.slice(5,7):"")+'</span>'+
+       '<span class="evt-t">'+esc(catName(e.catId))+(e.note?" — "+esc(e.note):"")+'</span>'+
+       '<span class="stage-time" style="margin-right:6px">'+money(e.amount)+'</span>'+
+       '<button class="del" data-delexp="'+e.id+'" aria-label="Удалить">×</button></div>';
+  });
+  h+='</section>';
+
+  var debtCat=D.categories.filter(function(c){return c.isDebt;})[0];
+  if(debtCat){
+    var paidTotal=D.expenses.filter(function(e){return e.catId===debtCat.id;}).reduce(function(s,e){return s+(+e.amount||0);},0);
+    h+='<section class="sec"><div class="sec-h"><span class="sec-t">долг «'+esc(debtCat.name)+'»</span></div>'+
+       '<div class="frow"><div class="field sm"><label>Всего долг, ₽</label>'+
+       '<input type="number" min="0" id="debtTotal" value="'+(D.debtTotal||"")+'" placeholder="не указано"></div>'+
+       '<div class="field" style="align-self:flex-end;padding-bottom:6px"><span class="habit-s">погашено за всё время '+money(paidTotal)+
+       (D.debtTotal?" из "+money(D.debtTotal):"")+'</span></div></div>';
+    if(D.debtTotal){
+      var dpct=Math.min(100,Math.round(paidTotal/D.debtTotal*100));
+      h+='<div class="bar"><i style="width:'+dpct+'%"></i></div>'+
+         '<p class="hint" style="margin-top:8px">осталось '+money(Math.max(0,D.debtTotal-paidTotal))+'</p>';
+    }
+    h+='</section>';
+  }
+
+  var saveCat=D.categories.filter(function(c){return c.isSaving;})[0];
+  if(saveCat){
+    var savedTotal=D.expenses.filter(function(e){return e.catId===saveCat.id;}).reduce(function(s,e){return s+(+e.amount||0);},0);
+    h+='<section class="sec"><div class="sec-h"><span class="sec-t">накопления «'+esc(saveCat.name)+'»</span></div>'+
+       '<div class="frow"><div class="field sm"><label>Цель, ₽</label>'+
+       '<input type="number" min="0" id="savingsGoal" value="'+(D.savingsGoal||"")+'" placeholder="не указано"></div>'+
+       '<div class="field" style="align-self:flex-end;padding-bottom:6px"><span class="habit-s">отложено за всё время '+money(savedTotal)+
+       (D.savingsGoal?" из "+money(D.savingsGoal):"")+'</span></div></div>';
+    if(D.savingsGoal){
+      var spct=Math.min(100,Math.round(savedTotal/D.savingsGoal*100));
+      h+='<div class="bar"><i style="width:'+spct+'%"></i></div>'+
+         (savedTotal>=D.savingsGoal
+           ?'<p class="hint" style="margin-top:8px">цель достигнута 🎉</p>'
+           :'<p class="hint" style="margin-top:8px">осталось '+money(D.savingsGoal-savedTotal)+'</p>');
+    }
+    h+='</section>';
+  }
+
+  var free=totalIncome-totalSpent;
+  h+='<section class="sec"><div class="sec-h"><span class="sec-t">итоги месяца</span>'+
+     '<button class="sec-a" id="copyBudget">скопировать</button></div><div class="sum">'+
+     "доход: "+money(totalIncome)+"<br>распределено по плану: "+money(totalPlanned)+
+     "<br>потрачено: "+money(totalSpent)+"<br>свободно: "+money(free)+'</div></section>';
+
+  app.innerHTML=h;
+  bind(mk,incomesM,expensesM);
+}
+
+function emptyBlockLocal(text){
+  return typeof emptyBlock==="function"?emptyBlock(text):'<p class="empty">'+text+'</p>';
+}
+
+function bind(mk,incomesM,expensesM){
+  document.getElementById("bprev").onclick=function(){month--;if(month<0){month=11;year--;}render();};
+  document.getElementById("bnext").onclick=function(){month++;if(month>11){month=0;year++;}render();};
+
+  document.getElementById("incSave").onclick=function(){
+    var name=document.getElementById("incName").value.trim();
+    var amt=+document.getElementById("incAmt").value||0;
+    var date=document.getElementById("incDate").value;
+    if(!name||!amt){toast("Впишите название и сумму");return;}
+    D.incomes.push({id:uid(),name:name,amount:amt,date:date});
+    save();render();
+  };
+  app.querySelectorAll("[data-delinc]").forEach(function(b){
+    b.onclick=function(){D.incomes=D.incomes.filter(function(i){return i.id!==b.dataset.delinc;});save();render();};
+  });
+  var cpi=document.getElementById("copyPrevInc");
+  if(cpi)cpi.onclick=function(){
+    var pm=month-1,py=year;if(pm<0){pm=11;py--;}
+    var pk=py+"-"+p2(pm+1);
+    var prev=D.incomes.filter(function(i){return i.date&&i.date.slice(0,7)===pk;});
+    if(!prev.length){toast("В прошлом месяце тоже пусто");return;}
+    prev.forEach(function(i){
+      var d=new Date(i.date);d.setMonth(d.getMonth()+1);
+      D.incomes.push({id:uid(),name:i.name,amount:i.amount,date:d.toISOString().slice(0,10)});
+    });
+    save();render();
+  };
+
+  var planRenderTimer=null;
+  app.querySelectorAll("[data-plan]").forEach(function(inp){
+    inp.oninput=function(){
+      if(!D.budgets[mk])D.budgets[mk]={};
+      D.budgets[mk][inp.dataset.plan]=+inp.value||0;
+      save();
+      clearTimeout(planRenderTimer);
+      planRenderTimer=setTimeout(render,700);
+    };
+  });
+  app.querySelectorAll("[data-delcat]").forEach(function(b){
+    b.onclick=function(){
+      if(!confirm("Удалить категорию? Траты в ней останутся, но без категории."))return;
+      D.categories=D.categories.filter(function(c){return c.id!==b.dataset.delcat;});
+      save();render();
+    };
+  });
+  document.getElementById("newCatBtn").onclick=function(){
+    var name=document.getElementById("newCat").value.trim();
+    if(!name){toast("Впишите название категории");return;}
+    var type=document.getElementById("newCatType").value;
+    if(type==="debt")D.categories.forEach(function(c){c.isDebt=false;});
+    if(type==="saving")D.categories.forEach(function(c){c.isSaving=false;});
+    D.categories.push({id:uid(),name:name,isDebt:type==="debt",isSaving:type==="saving"});
+    save();render();
+  };
+
+  document.getElementById("expSave").onclick=function(){
+    var catId=document.getElementById("expCat").value;
+    var amt=+document.getElementById("expAmt").value||0;
+    var date=document.getElementById("expDate").value;
+    var note=document.getElementById("expNote").value.trim();
+    if(!amt){toast("Впишите сумму траты");return;}
+    D.expenses.push({id:uid(),catId:catId,amount:amt,date:date,note:note});
+    save();render();
+  };
+  app.querySelectorAll("[data-delexp]").forEach(function(b){
+    b.onclick=function(){D.expenses=D.expenses.filter(function(e){return e.id!==b.dataset.delexp;});save();render();};
+  });
+
+  var dt=document.getElementById("debtTotal");
+  if(dt)dt.oninput=function(){
+    D.debtTotal=+dt.value||null;save();
+    clearTimeout(planRenderTimer);
+    planRenderTimer=setTimeout(render,700);
+  };
+  var sg=document.getElementById("savingsGoal");
+  if(sg)sg.oninput=function(){
+    D.savingsGoal=+sg.value||null;save();
+    clearTimeout(planRenderTimer);
+    planRenderTimer=setTimeout(render,700);
+  };
+
+  document.getElementById("copyBudget").onclick=function(){
+    var totalIncome=incomesM.reduce(function(s,i){return s+(+i.amount||0);},0);
+    var totalSpent=expensesM.reduce(function(s,e){return s+(+e.amount||0);},0);
+    var out=[MONTHS[month]+" "+year,"","Доходы:"];
+    incomesM.forEach(function(i){out.push("  "+i.name+": "+money(i.amount));});
+    out.push("Доход всего: "+money(totalIncome),"","Траты по категориям:");
+    D.categories.forEach(function(c){
+      var s=expensesM.filter(function(e){return e.catId===c.id;}).reduce(function(a,e){return a+(+e.amount||0);},0);
+      if(s)out.push("  "+c.name+": "+money(s));
+    });
+    out.push("Потрачено всего: "+money(totalSpent),"Свободно: "+money(totalIncome-totalSpent));
+    copyText(out.join("\n"));
+  };
+}
+
+return {render:render};
+})();
+
 var App={tab:"planner"};
 function applyTheme(t){
   document.documentElement.setAttribute("data-theme",t);
@@ -1552,7 +1840,8 @@ function showTab(t){
   if(App.tab==="flights"&&t!=="flights")Reysy.stop();
   App.tab=t;
   document.querySelectorAll(".tab").forEach(function(b){b.classList.toggle("active",b.dataset.tab===t);});
-  if(t==="planner")Planner.render();else if(t==="week")Week.render();else Reysy.render();
+  if(t==="planner")Planner.render();else if(t==="week")Week.render();
+  else if(t==="budget")Budget.render();else Reysy.render();
   window.scrollTo(0,0);
 }
 document.querySelectorAll(".tab").forEach(function(b){
